@@ -1,11 +1,11 @@
 /************************************************************************************************************/
-/* Program:		AWS_RX_Macros.sas																		    */
-/* Author:		Deo S. Bencio																				*/
-/* Date:		12/1/2016																					*/
-/* Purpose:		Program contains macros that massage data from various segments in T-MSIS				    */
-/*				THIS PROGRAM DOES NOT STAND ALONE.                                                          */
-/*				RX_build.sas - pull program for RX build													*/
-/*																	                                        */
+/* Program:		AWS_RX_Macros.sas																		                                          */
+/* Author:		Deo S. Bencio																				                                          */
+/* Date:		12/1/2016																					                                              */
+/* Purpose:		Program contains macros that massage data from various segments in T-MSIS				            	*/
+/*				THIS PROGRAM DOES NOT STAND ALONE.                                                              	*/
+/*				RX_build.sas - pull program for RX build													                                */
+/*																											                                                    */
 /* Modified:    12/12/2016 - CA update RX list of variables and remove eligibility macros                   */
 /*              2/20/2017  - CA change macro calls for pulling header and claims family segments to include */
 /*                           distribution and sort keys & dedupe claims family and header tables before join*/                                                    
@@ -22,6 +22,8 @@
 /*				9/22/2019 - DB modified to apply CCB Data-Cleaning Business Rules - 2019 Q3                 */
 /*							Upcased ICN ORIG and ICN ADJSTMT at the FA Header/Line Join						*/
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
+/*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
+/*							-MACTAF-1593: Add NEW_REFL_IND valid value 99                                   */
 /*                                                                                                          */
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
@@ -57,14 +59,8 @@ execute (
 		     order by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND,A.TMSIS_FIL_NAME,A.REC_NUM ) as RN  
 
 	        ,a.*
-			,CASE
-			  WHEN A.SUBMTG_STATE_CD = '97' THEN '42'
-			  WHEN A.SUBMTG_STATE_CD = '96' THEN '19'
-			  WHEN A.SUBMTG_STATE_CD = '94' THEN '30'
-	          WHEN A.SUBMTG_STATE_CD = '93' THEN '56'
-			  ELSE A.SUBMTG_STATE_CD
-             END AS NEW_SUBMTG_STATE_CD_LINE
-            ,CASE
+			,a.submtg_state_cd as new_submtg_state_cd_line
+		    ,CASE
               WHEN A.DRUG_UTLZTN_CD IS NULL THEN NULL
               ELSE SUBSTRING(A.DRUG_UTLZTN_CD,1,2)
 			 END AS RSN_SRVC_CD
@@ -258,7 +254,7 @@ execute (
     ,%var_set_fills(NDC_CD, cond1=0, cond2=8, cond3=9, cond4=#)
     ,%var_set_type4(UOM_CD,YES,cond1=F2,cond2=ML,cond3=GR,cond4=UN,cond5=ME,cond6=EA,cond7=GM)
     ,%var_set_type6(suply_days_cnt, cond1=8888, cond2=999, cond3=0)        
-    ,%var_set_type5(NEW_REFL_IND,lpad=2,lowerbound=0,upperbound=98)
+    ,%var_set_type5(NEW_REFL_IND,lpad=2,lowerbound=0,upperbound=99)
     ,%var_set_type2(BRND_GNRC_IND,0,cond1=0,cond2=1,cond3=2,cond4=3,cond5=4)
     ,%var_set_type6(dspns_fee_amt, cond1=88888.88) 
     ,case when trim(DRUG_UTLZTN_CD) is not NULL then upper(DRUG_UTLZTN_CD)

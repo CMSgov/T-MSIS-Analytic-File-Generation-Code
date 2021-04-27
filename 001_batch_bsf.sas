@@ -4,12 +4,13 @@
 /*Date: 3/2/2017
 /*Purpose: Generate monthly Beneficiary Summary File for TMSIS.
 /*Mod: 
+/* 		 3/4/2021: MACBIS-1683: DB mod to add file date to log file names
 /*Notes: 1. Set REPORTING_DATE and RUNDATE macros to control output.
 /*       2. Program calls 000_bsf_macros.sas and 002 through 023, which initializes macros
 /*          to make calls against Redshift to create 20 individual tables, which are then 
 /*          combined to create the final BSF summary file (name controled by above macro vars).
 /**********************************************************************************************/
- 
+
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
 %include &tms_config_macro;
@@ -73,7 +74,7 @@ nosqlremerge
 %GLOBAL DA_SCHEMA_INDB;
 %GLOBAL TABLE_NAME_INDB;
 %GLOBAL ST_FILTER;
-%GLOBAL MAX_KEEP; %LET MAX_KEEP = 0; /* THIS IS ONLY FOR TESTING (FOR NOW) */
+%GLOBAL MAX_KEEP; %LET MAX_KEEP = 0;
 %LET TABLE_NAME = TAF_MON_BSF;
 %LET FIL_4TH_NODE = BSF;
 
@@ -123,7 +124,7 @@ data _null_;
 run; 
 
 proc printto
-log="&path./logs/001_batch_bsf_&DARUNID..log" new;
+log="&path./logs/001_batch_bsf_&reporting_period._&DARUNID..log" new;
 run;
 
 %put begmon=&begmon st_dt = &st_dt TAF_FILE_DATE=&TAF_FILE_DATE;
@@ -156,10 +157,11 @@ options nomprint nosymbolgen nomlogic ;
 %include "&prog_path./018_bsf_ELG00018.sas" /source2;
 %include "&prog_path./020_bsf_ELG00020.sas" /source2;
 %include "&prog_path./021_bsf_ELG00021.sas" /source2;
+%include "&prog_path./022b_bsf_ELG00022.sas" /source2;
 %include "&prog_path./022_bsf_TPL00002.sas" /source2;
 %include "&prog_path./023_bsf_final.sas" /source2;
 
-
+options noerrabend;
 proc sql verbose;
 
 %tmsis_connect;
@@ -222,6 +224,9 @@ proc sql verbose;
 
 %create_initial_table (ELG00021, TMSIS_ENRLMT_TIME_SGMT_DATA, ENRLMT_EFCTV_DT, ENRLMT_END_DT,orderby=%str(msis_ident_num,ENRLMT_TYPE_CD));
 %create_ELG00021 (ELG00021, TMSIS_ENRLMT_TIME_SGMT_DATA, ENRLMT_EFCTV_DT, ENRLMT_END_DT);
+
+%create_initial_table (ELG00022, TMSIS_ELGBL_ID, ELGBL_ID_EFCTV_DT, ELGBL_ID_END_DT);
+%create_ELG00022 (ELG00022, TMSIS_ELGBL_ID, ELGBL_ID_EFCTV_DT, ELGBL_ID_END_DT);
 
 %create_initial_table (TPL00002, TMSIS_TPL_MDCD_PRSN_MN, ELGBL_PRSN_MN_EFCTV_DT, ELGBL_PRSN_MN_END_DT);
 %create_TPL00002 (TPL00002, TMSIS_TPL_MDCD_PRSN_MN, ELGBL_PRSN_MN_EFCTV_DT, ELGBL_PRSN_MN_END_DT);

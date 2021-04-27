@@ -11,6 +11,7 @@
 /*       to any of the four flags = 1.
 /**********************************************************************************************/
 
+
 %macro create_DSBLTY;
 
 	%create_temp_table(disability_need,

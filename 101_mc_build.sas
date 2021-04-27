@@ -1,25 +1,31 @@
 ** ========================================================================== 
 ** program documentation 
 ** program     : 101_mc_build.sas
-** project     : MACBIS - Provider TAF
-** programmer  : H. Cohen and D. Whalen
-** description : builds the managed care TAF file
-** parameters  : n/a
-** expects     : n/a
+** description : drives the managed care TAF build process and validates and recodes T-MSIS vaiables
+**               and creates constructed variables
+** input data  : [RedShift T-MSIS Tables]
+**                File_Header_Record_Managed_Care (segment 01)
+**                Managed_Care_Main (segment 02)
+**                Managed_care_location_and_contact_info (segment 03)
+**                Managed_care_service_area (segment 04)
+**                Managed_care_operating_authority (segment 05)
+**                Managed_care_plan_population_enrolled (segment 06)
+**                Managed_care_accreditation_organization (segment 07)
 ** -------------------------------------------------------------------------- 
 ** history 
 ** date        | action 
 ** ------------+------------------------------------------------------------- 
-** 06/16/2017  | program written (D. Whalen)
-** 07/17/2017  | program updated (H. Cohen) first test file
-** 09/01/2017  | program updated (H. Cohen) second test file
-** 11/03/2017  | program updated (H. Cohen) production pre-dev
+** 06/16/2017  | program written (H. Cohen)
+** 07/17/2017  | program updated (H. Cohen) 
+** 09/01/2017  | program updated (H. Cohen) 
+** 11/03/2017  | program updated (H. Cohen) 
 ** 07/05/2018  | program updated (H. Cohen) CCB changes
 ** 10/08/2018  | program updated (H. Cohen) CCB changes
 ** 03/20/2019  | program updated (H. Cohen) CCB changes
 ** 02/19/2020  | program updated (H. Cohen) CCB changes
 ** 06/09/2020  | program updated (H. Cohen) CCB changes
-** --------------------------------------------------------------------------;
+** 12/16/2020  | program updated (H. Cohen) CCB changes
+** ==========================================================================;
 
 %let taf = mcp;
 
@@ -115,8 +121,6 @@ run;
 %put begmon=&begmon st_dt = &st_dt TAF_FILE_DATE=&TAF_FILE_DATE RPT_PRD=&RPT_PRD;
 
 options noquotelenmax spool formdlim="~" ls=max nocenter compress=yes;
-* options noquotelenmax mprint symbolgen spool formdlim="~" ls=max nocenter compress=yes;
-* options nomprint nosymbolgen nomlogic ;
 
 title1 'MACBIS - MC TAF';
 title2 'MC Build';
@@ -124,7 +128,6 @@ footnote1 "(&sysdate): MACBIS MC TAF";
 
 %INCLUDE "&path/programs/*.sas";
 
-** --------------------------------------------------------------------------;
 ** array sizes;
 %let opamax = 15;  /* operating authority variables */
 %let acdmax = 3;   /* accreditation variables */
@@ -146,25 +149,11 @@ proc sql;
             from &DA_SCHEMA..mc_frmt_name_rng order by frmt_name_txt;
   ) by tmsis_passthrough;
 
-  execute(
-    create table #SPCLlst as
-      select _mcstart, 
-	  case when _mclabel like '%CHIP' then 'CHIP'
-	       when _mclabel like '%TPA' then 'TPA'
-	  end as SPCL
-	  from MC_formats_sm where fmtname='STFIPS' and (_mclabel like '%CHIP' or _mclabel like '%TPA')
-      order by _mcstart;
-  ) by tmsis_passthrough;
-
-  ** ------------------------------------------------------------------------;
- 
   %process_01_MCheader(outtbl=#MC01_Header);
-
-  ** ------------------------------------------------------------------------;
   %process_02_MCmain(maintbl=#MC01_Header, 
                      outtbl=#MC02_Main_RAW);
 
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables and sort records;
+  ** extract T-MSIS data apply and validate and recode source variables (as needed), use TAF variable names, add linking variables;
 
   %let srtlist = tms_run_id, 
                  submitting_state, 
@@ -176,7 +165,7 @@ proc sql;
                     fmttbl=mc_formats_sm,
                     fmtnm='STFIPC', 
                     srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
+                    newvar=SUBMTG_STATE_rcd, 
                     outtbl=#MC02_Main_STV,
                     fldtyp=C,
 					fldlen=2);
@@ -187,7 +176,7 @@ proc sql;
                     srtvars=srtlist,
                     fmttbl=mc_formats_sm,
                     fmtnm='STFIPN', 
-                    srcvar=SUBMTG_STATE_CD,
+                    srcvar=SUBMTG_STATE_rcd,
                     newvar=State, 
                     outtbl=#MC02_Main_ST,
                     fldtyp=C,
@@ -355,12 +344,7 @@ proc sql;
              MC_plan_type_CAT,
 			 reimbrsmt_arngmt_CAT,
 			 SAREA_STATEWIDE_IND,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*') || '-' || SPCL) as varchar(32))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32))
-			 end as MCP_LINK_KEY
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32)) as MCP_LINK_KEY
       from #MC02_Main_PRC
       order by &srtlist;
   ) by tmsis_passthrough;
@@ -369,10 +353,10 @@ proc sql;
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, constructed_MC02);
   
   %DROP_temp_tables(#MC02_Main_PRC);
-  
- ** ------------------------------------------------------------------------;
- ** Applies subsetting criteria and create constructed variable for segment MCR00003 ;
- %process_03_location(maintbl=#MC02_Main_RAW, 
+
+
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variable for segment MCR00003 ;
+  %process_03_location(maintbl=#MC02_Main_RAW, 
                       outtbl=#MC03_Location);
 
   %let srtlistl = tms_run_id, 
@@ -399,38 +383,19 @@ proc sql;
                     fmtnm='STFIPV', 
                     srcvar=managed_care_state2,
                     newvar=MC_STATE_CD, 
-                    outtbl=#MC03_Location_STV1,
+                    outtbl=#MC03_Location_STV,
                     fldtyp=C,
 					fldlen=2);
   ) by tmsis_passthrough;
  
   %DROP_temp_tables(#MC03_Location_STM);
 
-  execute( 
-    %recode_notnull (intbl=#MC03_Location_STV1,
-                    srtvars=srtlistl,
-                    fmttbl=mc_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#MC03_Location_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
-  %DROP_temp_tables(#MC03_Location_STV1);
-  
   execute(
     create table #MC03_Location_CNST 
                  diststyle key distkey(mc_plan_id)
                  compound sortkey (TMSIS_RUN_ID, SUBMTG_STATE_CD, mc_plan_id) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*') || '-' || SPCL) as varchar(32))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32))
-			 end as MCP_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32)) as MCP_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as MCP_FIL_DT,
              %nrbquote('&VERSION.') :: varchar(2) as MCP_VRSN,
              tms_run_id as TMSIS_RUN_ID,            
@@ -461,34 +426,17 @@ proc sql;
     drop table #MC03_Location_STV;
   ) by tmsis_passthrough;
 
-  ** ------------------------------------------------------------------;                         
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variable for segment MCR00004 ;
   %process_04_service_area (maintbl=#MC02_Main_RAW,
                             outtbl=#MC04_Service_Area);
 
-  execute( 
-    %recode_notnull (intbl=#MC04_Service_Area,
-                    srtvars=srtlist,
-                    fmttbl=mc_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#MC04_Service_Area_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-  
   ** create TAF segment for service area ;
   execute(
     create table #MC04_Service_Area_CNST
                  diststyle key distkey(mc_plan_id)
                  compound sortkey (TMSIS_RUN_ID, SUBMTG_STATE_CD, mc_plan_id) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*') || '-' || SPCL) as varchar(32))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32))
-			 end as MCP_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32)) as MCP_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as MCP_FIL_DT,
              %nrbquote('&VERSION.') :: varchar(2) as MCP_VRSN,
              tms_run_id as TMSIS_RUN_ID,
@@ -497,20 +445,20 @@ proc sql;
              managed_care_service_area_eff_date as MC_SAREA_EFCTV_DT,
              managed_care_service_area_end_date as MC_SAREA_END_DT,
              managed_care_service_area_name as MC_SAREA_NAME
-      from #MC04_Service_Area_STV
+      from #MC04_Service_Area
       order by TMSIS_RUN_ID, 
                  SUBMTG_STATE_CD, 
                  mc_plan_id;
   ) by tmsis_passthrough;
 
-%Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, recodes_MC04);
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, constructed_MC04);
 
   execute( 
     drop table #MC04_Service_Area;
-	drop table #MC04_Service_Area_STV;
   ) by tmsis_passthrough;
-  ** ------------------------------------------------------------------;                         
+
+
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variable for segment MCR00005 ;
   %process_05_operating_authority (maintbl=#MC02_Main_RAW, 
                                    outtbl=#MC05_Operating_Authority);
                          
@@ -594,24 +542,12 @@ proc sql;
     drop table #MC05_Operating_Authority2;
   ) by tmsis_passthrough;
 
-  ** ------------------------------------------------------------------;
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variable for segment MCR00006 ;
   %process_06_population (maintbl=#MC02_Main_RAW, 
                           outtbl=#MC06_Population_RAW);
 
-  execute( 
-    %recode_notnull (intbl=#MC06_Population_RAW,
-                    srtvars=srtlist,
-                    fmttbl=mc_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#MC06_Population_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
     execute( 
-    %recode_lookup (intbl=#MC06_Population_STV,
+    %recode_lookup (intbl=#MC06_Population_RAW,
                     srtvars=srtlist,
                     fmttbl=mc_formats_sm,
                     fmtnm='ELIG2V', 
@@ -622,7 +558,7 @@ proc sql;
 					fldlen=2);
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#MC06_Population_STV);
+  %DROP_temp_tables(#MC06_Population_RAW);
 
   execute( 
     %recode_lookup (intbl=#MC06_Population1,
@@ -641,12 +577,7 @@ proc sql;
                  diststyle key distkey(mc_plan_id)
                  compound sortkey (TMSIS_RUN_ID, SUBMTG_STATE_CD, mc_plan_id) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*') || '-' || SPCL) as varchar(32))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32))
-			 end as MCP_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(state_plan_id_num, '*')) as varchar(32)) as MCP_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as MCP_FIL_DT,
              %nrbquote('&VERSION.') :: varchar(2) as MCP_VRSN,
              tms_run_id as TMSIS_RUN_ID,
@@ -754,12 +685,12 @@ proc sql;
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, constructed_MC06);
  
   execute( 
-    drop table #MC06_Population_RAW;
     drop table #MC06_Population2;
     drop table #MC06_Population_CNST;
   ) by tmsis_passthrough;
 
-  ** ------------------------------------------------------------------;
+
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variable for segment MCR00007 ;
   %process_07_accreditation (maintbl=#MC02_Main_RAW, 
                              outtbl=#MC07_Accreditation);
 
@@ -881,6 +812,7 @@ proc sql;
     drop table #MC07_Accreditation_OTHR;
   ) by tmsis_passthrough;
  
+  ** complete base/main table by adding operating authroity, enrollment, and accreditation information ;
   execute(
     create table #MC02_Base
                 diststyle key distkey(mc_plan_id) as
@@ -989,6 +921,9 @@ proc sql;
 
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, base_MCP);
 
+
+  * insert contents of each remaining temp table into final TAF files;
+
   execute(
     insert into &DA_SCHEMA..TAF_MCP
     select *
@@ -1013,6 +948,8 @@ proc sql;
 	from #MC06_Population 
   ) by tmsis_passthrough;
 
+
+** complete the TAF build by updating external references used for all TAF ;
 
  	sysecho 'in jobcntl updt2';
 	%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.);

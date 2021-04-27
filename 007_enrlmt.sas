@@ -1,13 +1,12 @@
-/**********************************************************************************************/
-/*Program: 007_enrlmt.sas
-/*modified: Heidi Cohen
-/*Date: 10/2019
-/*Purpose: Generate the annual PR segment for Enrollment
-/*Mod: 
-/*Notes: This program aggregates unique values across the CY year for variables in collist.
-/*       It creates _SPLMTL flag for base.
-/*       It inserts enrollment records into the permanent TAF table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 007_enrlmt.sas
+** description : Generate the annual PR segment for enrollment
+** date        : 10/2019 12/2020
+** note        : This program aggregates unique values across the CY year for variables in collist.
+**               It creates _SPLMTL flag for base.
+**               Then inserts enrollment records into the permanent TAF table.
+** ==========================================================================;
 
 %macro create_ENRLMT;
 
@@ -29,11 +28,8 @@
 
 	/* Insert into permanent table */
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_PR_ENRLMT
-		select 
-
-			%table_id_cols
+		%macro basecols;
+	
 			,PRVDR_MDCD_EFCTV_DT
 			,PRVDR_MDCD_END_DT
 			,PRVDR_MDCD_ENRLMT_STUS_CD
@@ -53,6 +49,16 @@
 			,PRVDR_ENRLMT_FLAG_10
 			,PRVDR_ENRLMT_FLAG_11
 			,PRVDR_ENRLMT_FLAG_12
+
+		%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_PR_ENRLMT
+		(DA_RUN_ID, PR_LINK_KEY, PR_FIL_DT, PR_VRSN, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID %basecols)
+		select 
+
+			%table_id_cols
+			%basecols
 
 		from enrlmt_pr_&year.
 

@@ -3,10 +3,16 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_LTSS_PRTCPTN_DATA and create unique output for BSF.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
 %macro create_ELG00013(tab_no, _2x_segment, eff_date, end_date);
 execute (
      create temp table &tab_no._step1

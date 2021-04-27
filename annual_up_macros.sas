@@ -5,6 +5,10 @@
 /*Purpose: Macros to generate the UP TAF using the DE and monthly claims
 /*Mod: 
 /**********************************************************************************************/
+/* Copyright (C) Mathematica Policy Research, Inc.                                            */
+/* This code cannot be copied, distributed or used without the express written permission     */
+/* of Mathematica Policy Research, Inc.                                                       */ 
+/**********************************************************************************************/
 
 /* Macro max_run_id to get the highest da_run_id for the given state for each input monthly TAF (DE or claims). This
    table will then be merged back to the monthly TAF to pull all records for that state, month, and da_run_id.

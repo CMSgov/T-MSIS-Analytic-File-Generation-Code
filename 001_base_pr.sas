@@ -1,16 +1,14 @@
-/**********************************************************************************************/
-/*Program: 001_base_pr.sas
-/*Author: Rosalie Malsberger, Mathematica Policy Research
-/*modified: Heidi Cohen
-/*Date: 05/2018 10/2019
-/*Purpose: Generate the annual PR segment 001: Base
-/*Mod: 
-/*Notes: This program creates all the columns for the base file. 
-/*       It takes the last best value or ever in the year value depending on element and
-/*       calculates continuous range for contract date as well as aggregates values for the new accreditation arrays.
-/*       Finally, it pulls in _SPLMTL flags.
-/*       It then inserts into the permanent table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 001_base_pr.sas
+** description : Generate the annual PR segment 001: Base
+** date        : 10/2019 12/2020
+** note        : This program creates all the columns for the base file. 
+**               It takes the last best value or ever in the year value depending on element and
+**               includes one or two NPI values if available.
+**               Finally, it pulls in _SPLMTL flags.
+**               It then inserts into the permanent table.
+** ==========================================================================;
 
 %macro create_BASE;
 
@@ -32,6 +30,7 @@
 									%monthly_array(DEATH_DT)
 									%monthly_array(AGE_NUM)
 									%nonmiss_month(FAC_GRP_INDVDL_CD)
+									%ind_nonmiss_month
 									%last_best(OWNRSHP_CD)
 									%last_best(OWNRSHP_CAT)
 									%last_best(PRVDR_PRFT_STUS_CD)
@@ -82,13 +81,13 @@
 									%any_month(SUBMTG_STATE_PRVDR_ID,PRVDR_FLAG,condition=%nrstr(is not null))
 									 ),
 	              outercols=%nrbquote(  
-									 %assign_nonmiss_month(PRVDR_1ST_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_1ST_NAME)
-									 %assign_nonmiss_month(PRVDR_MDL_INITL_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_MDL_INITL_NAME)
-									 %assign_nonmiss_month(PRVDR_LAST_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_LAST_NAME)
-									 %assign_nonmiss_month(GNDR_CD,FAC_GRP_INDVDL_CD_MN,GNDR_CD)
-									 %assign_nonmiss_month(BIRTH_DT,FAC_GRP_INDVDL_CD_MN,BIRTH_DT)
-									 %assign_nonmiss_month(DEATH_DT,FAC_GRP_INDVDL_CD_MN,DEATH_DT)
-									 %assign_nonmiss_month(AGE_NUM,FAC_GRP_INDVDL_CD_MN,AGE_NUM)
+									 %assign_nonmiss_month(PRVDR_1ST_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_1ST_NAME,monthval2=ind_any_MN,incol2=PRVDR_1ST_NAME)
+									 %assign_nonmiss_month(PRVDR_MDL_INITL_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_MDL_INITL_NAME,monthval2=ind_any_MN,incol2=PRVDR_MDL_INITL_NAME)
+									 %assign_nonmiss_month(PRVDR_LAST_NAME,FAC_GRP_INDVDL_CD_MN,PRVDR_LAST_NAME,monthval2=ind_any_MN,incol2=PRVDR_LAST_NAME)
+									 %assign_nonmiss_month(GNDR_CD,FAC_GRP_INDVDL_CD_MN,GNDR_CD,monthval2=ind_any_MN,incol2=GNDR_CD)
+									 %assign_nonmiss_month(BIRTH_DT,FAC_GRP_INDVDL_CD_MN,BIRTH_DT,monthval2=ind_any_MN,incol2=BIRTH_DT)
+									 %assign_nonmiss_month(DEATH_DT,FAC_GRP_INDVDL_CD_MN,DEATH_DT,monthval2=ind_any_MN,incol2=DEATH_DT)
+									 %assign_nonmiss_month(AGE_NUM,FAC_GRP_INDVDL_CD_MN,AGE_NUM,monthval2=ind_any_MN,incol2=AGE_NUM)
 									) );
 									 
 	/* Join to the monthly _SPLMTL flags. */
@@ -96,7 +95,7 @@
 	execute (
 		create temp table base_&year._final
 	    distkey(SUBMTG_STATE_PRVDR_ID) 
-		sortkey(SUBMTG_STATE_CD,SUBMTG_STATE_PRVDR_ID,splmtl_submsn_type) as
+		sortkey(SUBMTG_STATE_CD,SUBMTG_STATE_PRVDR_ID) as
 
 		select a.*
 			   ,d2.PRVDR_NPI_01
@@ -113,25 +112,25 @@
 
 		from base_pr_&year. a
 		    left join
-			LCTN_SPLMTL_&year. b on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.splmtl_submsn_type=b.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = b.SUBMTG_STATE_PRVDR_ID
+			LCTN_SPLMTL_&year. b on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = b.SUBMTG_STATE_PRVDR_ID
 			left join 
-			LCNS_SPLMTL_&year. c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.splmtl_submsn_type=c.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = c.SUBMTG_STATE_PRVDR_ID
+			LCNS_SPLMTL_&year. c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = c.SUBMTG_STATE_PRVDR_ID
 			left join
-			ID_SPLMTL_&year. d on a.SUBMTG_STATE_CD = d.SUBMTG_STATE_CD and a.splmtl_submsn_type=d.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = d.SUBMTG_STATE_PRVDR_ID
+			ID_SPLMTL_&year. d on a.SUBMTG_STATE_CD = d.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = d.SUBMTG_STATE_PRVDR_ID
 			left join
-			npi_final d2 on a.SUBMTG_STATE_CD = d2.SUBMTG_STATE_CD and a.splmtl_submsn_type=d2.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = d2.SUBMTG_STATE_PRVDR_ID
+			npi_final d2 on a.SUBMTG_STATE_CD = d2.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = d2.SUBMTG_STATE_PRVDR_ID
 			left join
-			GRP_SPLMTL_&year. e on a.SUBMTG_STATE_CD = e.SUBMTG_STATE_CD and a.splmtl_submsn_type=e.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = e.SUBMTG_STATE_PRVDR_ID
+			GRP_SPLMTL_&year. e on a.SUBMTG_STATE_CD = e.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = e.SUBMTG_STATE_PRVDR_ID
 			left join 
-			PGM_SPLMTL_&year. f on a.SUBMTG_STATE_CD = f.SUBMTG_STATE_CD and a.splmtl_submsn_type=f.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = f.SUBMTG_STATE_PRVDR_ID
+			PGM_SPLMTL_&year. f on a.SUBMTG_STATE_CD = f.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = f.SUBMTG_STATE_PRVDR_ID
 			left join 
-			TXNMY_SPLMTL_&year. g on a.SUBMTG_STATE_CD = g.SUBMTG_STATE_CD and a.splmtl_submsn_type=g.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = g.SUBMTG_STATE_PRVDR_ID
+			TXNMY_SPLMTL_&year. g on a.SUBMTG_STATE_CD = g.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = g.SUBMTG_STATE_PRVDR_ID
 			left join 
-			ENRLMT_SPLMTL_&year. h on a.SUBMTG_STATE_CD = h.SUBMTG_STATE_CD and a.splmtl_submsn_type=h.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = h.SUBMTG_STATE_PRVDR_ID
+			ENRLMT_SPLMTL_&year. h on a.SUBMTG_STATE_CD = h.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = h.SUBMTG_STATE_PRVDR_ID
 			left join 
-			BED_SPLMTL_&year. i on a.SUBMTG_STATE_CD = i.SUBMTG_STATE_CD and a.splmtl_submsn_type=i.splmtl_submsn_type and a.SUBMTG_STATE_PRVDR_ID = i.SUBMTG_STATE_PRVDR_ID
+			BED_SPLMTL_&year. i on a.SUBMTG_STATE_CD = i.SUBMTG_STATE_CD and a.SUBMTG_STATE_PRVDR_ID = i.SUBMTG_STATE_PRVDR_ID
 
-			order by SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, splmtl_submsn_type;
+			order by SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
 
 	) by tmsis_passthrough;
 
@@ -232,7 +231,8 @@
 	execute (
 		insert into &DA_SCHEMA..TAF_ANN_PR_&tblname.
 		(DA_RUN_ID, PR_LINK_KEY, PR_FIL_DT, PR_VRSN, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID %basecols)
-		select 
+		select
+
 		    %table_id_cols
 		    %basecols
 

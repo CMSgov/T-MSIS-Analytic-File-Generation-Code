@@ -1,11 +1,9 @@
 %* ========================================================================== 
 ** program documentation 
 ** program     : 002_mc_macros.sas
-** project     : MACBIS - Managed Care TAF
-** programmer  : Dan Whalen and Heidi Cohen
 ** description : collection of macros used by the MCP TAF build
-** --------------------------------------------------------------------------;
-/**********************************************************************************************/
+** ==========================================================================;
+
 
 %macro upper_case (textst);
 nullif(trim(upper(&textst)),'')
@@ -31,7 +29,7 @@ nullif(trim(upper(&textst)),'')
   create table &outtbl 
          diststyle key distkey(state_plan_id_num) 
          compound sortkey (&&&runvars) as
-    select T.*, R.SPCL
+    select T.*
     from &intbl T
          inner join &runtbl R
 		%if (&runtyp=M) %then %do;
@@ -47,7 +45,7 @@ nullif(trim(upper(&textst)),'')
     create table &outtbl
            diststyle key distkey(state_plan_id_num)
            compound sortkey(tms_run_id, submitting_state, state_plan_id_num) as
-      select &&&collist, SPCL
+      select &&&collist
       from  &intbl
       where tms_is_active=1
       %if ("&whr" ne "") %then %do;
@@ -65,6 +63,7 @@ nullif(trim(upper(&textst)),'')
       where tms_is_active=1
 		and tms_reporting_period is not null
 		and tot_rec_cnt > 0
+		and trim(submitting_state) <> '96'
 	    %if %sysfunc(FIND(&ST_FILTER,%str(ALL))) = 0 %then %do;
         and &ST_FILTER
 	    %end;

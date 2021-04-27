@@ -1,13 +1,12 @@
-/**********************************************************************************************/
-/*Program: 004_lcns.sas
-/*modified: Heidi Cohen
-/*Date: 10/2019
-/*Purpose: Generate the annual PR segment for license
-/*Mod: 
-/*Notes: This program aggregates unique values across the CY year for variables in collist.
-/*       It creates _SPLMTL flag for base.
-/*       It inserts license records into the permanent TAF table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 004_lcns.sas
+** description : Generate the annual PR segment for license
+** date        : 10/2019 12/2020
+** note        : This program aggregates unique values across the CY year for variables in collist.
+**               It creates _SPLMTL flag for base.
+**               Then inserts license records into the permanent TAF table.
+** ==========================================================================;
 
 %macro create_LCNS;
 
@@ -26,11 +25,8 @@
 
 	/* Insert into permanent table */
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_PR_LCNS
-		select 
-
-			%table_id_cols(loctype=2)
+		%macro basecols;
+	
 			,PRVDR_LCTN_ID
 			,LCNS_TYPE_CD
 			,LCNS_OR_ACRDTN_NUM
@@ -47,6 +43,16 @@
 			,PRVDR_LCNS_FLAG_10
 			,PRVDR_LCNS_FLAG_11
 			,PRVDR_LCNS_FLAG_12
+
+		%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_PR_LCNS
+		(DA_RUN_ID, PR_LOC_LINK_KEY, PR_FIL_DT, PR_VRSN, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID %basecols)
+		select 
+
+			%table_id_cols(loctype=2)
+			%basecols
 
 		from lcns_pr_&year.
 

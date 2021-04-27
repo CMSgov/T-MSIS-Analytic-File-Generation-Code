@@ -1,5 +1,5 @@
 /**********************************************************************************************/
-/*Program: de_annual_build.sas  
+/*Program: de_annual_build.sas
 /*Author: Rosalie Malsberger, Mathematica Policy Research
 /*Date: 05/2018
 /*Purpose: Generate the annual DE TAF using the monthly BSF TAF tables
@@ -58,7 +58,6 @@ minoperator
 
 %INCLUDE "/sasdata/users/&sysuserid/&TMSIS/&sub_env/data_analytics/taf/programs/AWS_Shared_Macros.sas";
 
-options noerrorabend;
 
 %let basedir=/sasdata/users/&sysuserid/&TMSIS/&sub_env/data_analytics/taf/ann_de;
 
@@ -134,7 +133,6 @@ QUIT;
 
 %let DA_RUN_ID=&DA_RUN_ID.;
 
-
 proc printto log="&basedir./logs/de_annual_build_&da_run_id..log" new;
 run;
 
@@ -164,8 +162,9 @@ proc sql ;
 	    For claims, run for current year only.
 
 	    Insert into a metadata table to be able to link back to this run. */
+	
+     %max_run_id(file=BSF, tbl=taf_mon_bsf);
 
-     %max_run_id(file=BSF, tbl=taf_mon_bsf)
 	 %max_run_id(file=IP)
 	 %max_run_id(file=LT)
 	 %max_run_id(file=OT)

@@ -17,7 +17,9 @@
 /*				9/22/2019 - DB modified to apply CCB Data-Cleaning Business Rules - 2019 Q3                 */
 /*							Upcased ICN ORIG and ICN ADJSTMT at the FA Header/Line Join						*/
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
-/*                                                                                                          */
+/*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
+/*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
+/*							-MACTAF-1564: Add TAF selection date to the IP and OT headers					*/
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 options spool;
@@ -54,14 +56,7 @@ execute (
         row_number() over (partition by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND 
 		order by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND,A.TMSIS_FIL_NAME,A.REC_NUM ) as RN  
 
-		,CASE
-		WHEN A.SUBMTG_STATE_CD = '97' THEN '42'
-		WHEN A.SUBMTG_STATE_CD = '96' THEN '19'
-	    WHEN A.SUBMTG_STATE_CD = '94' THEN '30'
-	    WHEN A.SUBMTG_STATE_CD = '93' THEN '56'
-		ELSE A.SUBMTG_STATE_CD
-		END AS NEW_SUBMTG_STATE_CD_LINE
-
+			,a.submtg_state_cd as new_submtg_state_cd_line
 		from	&FL2._LINE_IN as A inner join FA_HDR_&FL. H
 
 		on   	H.TMSIS_RUN_ID = A.TMSIS_RUN_ID_LINE and
@@ -337,6 +332,10 @@ execute (
 	,null :: char(3) as MAJ_DGNSTC_CTGRY
 	,cast(nullif(IAP_CONDITION_IND, IAP_CONDITION_IND) as char(6)) as IAP_COND_IND
 	,cast(nullif(PRIMARY_HIERARCHICAL_CONDITION, PRIMARY_HIERARCHICAL_CONDITION) as char(9)) as PRMRY_HIRCHCL_COND
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_ADD_TS
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_UPDT_TS 
+	,%fix_old_dates(SRVC_ENDG_DT_DRVD)
+	,%var_set_type2(SRVC_ENDG_DT_CD,0,cond1=1,cond2=2,cond3=3,cond4=4,cond5=5)
 
 	FROM 
 	(select *,
@@ -587,6 +586,8 @@ execute (
 	, upper(a.DGNS_POA_9_CD_IND) as dgns_poa_9_cd_ind
 	, upper(a.DRG_CD) as drg_cd
 	, upper(a.DRG_CD_IND) as drg_cd_ind
+	, case when a.DSCHRG_DT is not null then a.DSCHRG_DT else null end as SRVC_ENDG_DT_DRVD_H
+	, case when a.DSCHRG_DT is not null then '1' else null end as SRVC_ENDG_DT_CD_H
 	, coalesce(a.DSCHRG_DT,'01JAN1960') as DSCHRG_DT
 	, upper(a.DSCHRG_HR_NUM) as dschrg_hr_num
 	, upper(a.DRG_DESC) as drg_desc

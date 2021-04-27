@@ -2,9 +2,8 @@
 /*Program: 000_bsf_macros.sas
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
-/*Purpose: Module macros for BSF.
+/*Purpose: Module macros for BSF. 
 /**********************************************************************************************/
-
 options minoperator;
 
 %macro AWS_MAXID_pull_bsf; 
@@ -28,6 +27,7 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	from &TMSIS_SCHEMA..tmsis_fil_prcsg_job_cntl
 	where  job_stus = 'success'
 		and tot_actv_rcrds_elg02 > 0
+		and submtg_state_cd <> '96'
 
 	     %if %sysfunc(FIND(&ST_FILTER,%str(ALL))) = 0 %then %do;
          and &ST_FILTER
@@ -129,26 +129,6 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	 ) by tmsis_passthrough;
 
 execute (update &tab_no
-         set submtg_state_cd = '19'
-		 where submtg_state_cd = '96'
-          ) by tmsis_passthrough;
-
-execute (update &tab_no
-         set submtg_state_cd = '42'
-		 where submtg_state_cd = '97'
-          ) by tmsis_passthrough;
-
-execute (update &tab_no
-         set submtg_state_cd = '56'
-		 where submtg_state_cd = '93'
-          ) by tmsis_passthrough;
-
-execute (update &tab_no
-         set submtg_state_cd = '30'
-		 where submtg_state_cd = '94'
-          ) by tmsis_passthrough;
-
-execute (update &tab_no
          set msis_ident_num = upper(msis_ident_num)
           ) by tmsis_passthrough;
 
@@ -228,7 +208,7 @@ execute(
  %if &I=1 %then %let valids = %unquote(%nrbquote('&val'));
  %else %let valids = &valids,%unquote(%nrbquote('&val'));
 %end;
-case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &var 
+case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else null end as &var 
 %mend set_to_null;
 
 
@@ -327,7 +307,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 ,%set_to_null(SSN_VRFCTN_IND,%str(0 1 2))
 ,%set_to_null(INCM_CD,%str(01 02 03 04 05 06 07 08))
 ,%set_to_null(VET_IND,%str(0 1))
-,%set_to_null(CTZNSHP_IND,%str(0 1))
+,%set_to_null(CTZNSHP_IND,%str(0 1 2))
 ,%set_to_null(CTZNSHP_VRFCTN_IND,%str(0 1))
 ,%set_to_null(IMGRTN_STUS_CD,%str(1 2 3 8))
 , &tbl..IMGRTN_STUS_5_YR_BAR_END_DT
@@ -653,7 +633,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 , %end;
  
 &tbl..MC_PLAN_ID
-,%set_to_null(ENRLD_MC_PLAN_TYPE_CD,%str(0 1 2 3 4 5 6 7 8 9 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 60 70 80))
+,%set_to_null(ENRLD_MC_PLAN_TYPE_CD,%str(0 1 2 3 4 5 6 7 8 9 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 60 70 80))
 , &tbl..MC_PLAN_ENRLMT_EFCTV_DT      
 , &tbl..MC_PLAN_ENRLMT_END_DT          
 
@@ -691,8 +671,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 , &tbl..TMSIS_ACTV_IND 
 , &tbl..SUBMTG_STATE_CD 
 , &tbl..REC_NUM  
-, case when 1<=length(trim(&tbl..RACE_CD))<3 then lpad(trim(&tbl..RACE_CD),3,'00')
-       else &tbl..RACE_CD end as RACE_CD
+, lpad(trim(&tbl..RACE_CD),3,'0') as RACE_CD
 , &tbl..RACE_DCLRTN_EFCTV_DT  
 , &tbl..RACE_DCLRTN_END_DT    
 , &tbl..RACE_OTHR_TXT  
@@ -715,8 +694,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 , &tbl..TMSIS_ACTV_IND 
 , &tbl..SUBMTG_STATE_CD 
 , &tbl..REC_NUM  
-, case when length(trim(&tbl..DSBLTY_TYPE_CD))=1 then lpad(trim(&tbl..DSBLTY_TYPE_CD),2,'0')
-       else  &tbl..DSBLTY_TYPE_CD end as DSBLTY_TYPE_CD
+, lpad(trim(&tbl..DSBLTY_TYPE_CD),2,'0') as DSBLTY_TYPE_CD
 ,%end;
  
  &tbl..DSBLTY_TYPE_EFCTV_DT    
@@ -758,8 +736,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 , &tbl..TMSIS_ACTV_IND 
 , &tbl..SUBMTG_STATE_CD 
 , &tbl..REC_NUM  
-, case when 1<=length(trim(&tbl..NDC_UOM_CHRNC_NON_HH_CD))<3 then lpad(trim(&tbl..NDC_UOM_CHRNC_NON_HH_CD),3,'00')
-       else &tbl..NDC_UOM_CHRNC_NON_HH_CD end as NDC_UOM_CHRNC_NON_HH_CD
+, lpad(trim(&tbl..NDC_UOM_CHRNC_NON_HH_CD),3,'0') as NDC_UOM_CHRNC_NON_HH_CD
 ,%end;
  
  &tbl..NDC_UOM_CHRNC_NON_HH_EFCTV_DT   
@@ -790,6 +767,36 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 
 %mend ELG00021;
 
+%macro ELG00022(final);
+%if %eval(&final>=1)=1 %then %let tbl=t&final;
+%else %let tbl=a;
+
+%if %eval(&final>=1)=0  %then %do;
+  &tbl..TMSIS_RUN_ID  
+, &tbl..TMSIS_ACTV_IND 
+, &tbl..SUBMTG_STATE_CD 
+, &tbl..REC_NUM   
+,%end;
+ 
+ &tbl..ELGBL_ID_EFCTV_DT   
+, &tbl..ELGBL_ID_END_DT       
+, &tbl..ELGBL_ID_TYPE_CD  
+, &tbl..ELGBL_ID 
+, &tbl..ELGBL_ID_ISSG_ENT_ID_TXT
+, &tbl..RSN_FOR_CHG 
+
+%if %eval(&final>=1)=1  %then %do;
+, &tbl..ELGBL_ID_ADDTNL
+, &tbl..ELGBL_ID_ADDTNL_ENT_ID 
+, &tbl..ELGBL_ID_ADDTNL_RSN_CHG
+, &tbl..ELGBL_ID_MSIS_XWALK
+, &tbl..ELGBL_ID_MSIS_XWALK_ENT_ID 
+, &tbl..ELGBL_ID_MSIS_XWALK_RSN_CHG
+%end; 
+
+
+%mend ELG00022;
+
 %macro TPL00002(final);
 %if %eval(&final>=1)=1 %then %let tbl=t&final;
 %else %let tbl=a;
@@ -810,7 +817,7 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 
 %mend TPL00002;
 
-%macro FINAL_ORDER;
+%macro FINAL_FORMAT;
  DA_RUN_ID
 ,BSF_FIL_DT
 ,BSF_VRSN
@@ -977,7 +984,13 @@ case when trim(&tbl..&var) in(&valids) then trim(&tbl..&var) else null end as &v
 ,RACE_ETHNICITY_FLAG as RACE_ETHNCTY_FLAG
 ,RACE_ETHNCTY_EXP_FLAG
 ,HISPANIC_ETHNICITY_FLAG as HSPNC_ETHNCTY_FLAG
-%mend FINAL_ORDER;
+,upper(nullif(trim(ELGBL_ID_ADDTNL),'')) as ELGBL_ID_ADDTNL
+,upper(nullif(trim(ELGBL_ID_ADDTNL_ENT_ID),'')) as  ELGBL_ID_ADDTNL_ENT_ID
+,upper(nullif(trim(ELGBL_ID_ADDTNL_RSN_CHG),'')) as ELGBL_ID_ADDTNL_RSN_CHG
+,upper(nullif(trim(ELGBL_ID_MSIS_XWALK),'')) as ELGBL_ID_MSIS_XWALK
+,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_ENT_ID),'')) as ELGBL_ID_MSIS_XWALK_ENT_ID
+,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_RSN_CHG),'')) as ELGBL_ID_MSIS_XWALK_RSN_CHG
+%mend FINAL_FORMAT;
   %macro drop_table_multi(dsn_list);
     %let tbl_ct = %sysfunc(countw(&dsn_list));
 
@@ -1108,11 +1121,290 @@ title "Number of records in &table";
 
 %end;
 %mend check_max_keep;
+
+%macro BSF_INSERT_ORDER;
+DA_RUN_ID
+,BSF_FIL_DT
+,BSF_VRSN
+,MSIS_IDENT_NUM
+,SSN_NUM
+,SSN_IND
+,SSN_VRFCTN_IND
+,MDCR_BENE_ID
+,MDCR_HICN_NUM
+,TMSIS_RUN_ID
+,SUBMTG_STATE_CD
+,REG_FLAG
+,MSIS_CASE_NUM
+,SNGL_ENRLMT_FLAG
+,MDCD_ENRLMT_EFF_DT_1
+,MDCD_ENRLMT_END_DT_1
+,MDCD_ENRLMT_EFF_DT_2
+,MDCD_ENRLMT_END_DT_2
+,MDCD_ENRLMT_EFF_DT_3
+,MDCD_ENRLMT_END_DT_3
+,MDCD_ENRLMT_EFF_DT_4
+,MDCD_ENRLMT_END_DT_4
+,MDCD_ENRLMT_EFF_DT_5
+,MDCD_ENRLMT_END_DT_5
+,MDCD_ENRLMT_EFF_DT_6
+,MDCD_ENRLMT_END_DT_6
+,MDCD_ENRLMT_EFF_DT_7
+,MDCD_ENRLMT_END_DT_7
+,MDCD_ENRLMT_EFF_DT_8
+,MDCD_ENRLMT_END_DT_8
+,MDCD_ENRLMT_EFF_DT_9
+,MDCD_ENRLMT_END_DT_9
+,MDCD_ENRLMT_EFF_DT_10
+,MDCD_ENRLMT_END_DT_10
+,MDCD_ENRLMT_EFF_DT_11
+,MDCD_ENRLMT_END_DT_11
+,MDCD_ENRLMT_EFF_DT_12
+,MDCD_ENRLMT_END_DT_12
+,MDCD_ENRLMT_EFF_DT_13
+,MDCD_ENRLMT_END_DT_13
+,MDCD_ENRLMT_EFF_DT_14
+,MDCD_ENRLMT_END_DT_14
+,MDCD_ENRLMT_EFF_DT_15
+,MDCD_ENRLMT_END_DT_15
+,MDCD_ENRLMT_EFF_DT_16
+,MDCD_ENRLMT_END_DT_16
+,CHIP_ENRLMT_EFF_DT_1
+,CHIP_ENRLMT_END_DT_1
+,CHIP_ENRLMT_EFF_DT_2
+,CHIP_ENRLMT_END_DT_2
+,CHIP_ENRLMT_EFF_DT_3
+,CHIP_ENRLMT_END_DT_3
+,CHIP_ENRLMT_EFF_DT_4
+,CHIP_ENRLMT_END_DT_4
+,CHIP_ENRLMT_EFF_DT_5
+,CHIP_ENRLMT_END_DT_5
+,CHIP_ENRLMT_EFF_DT_6
+,CHIP_ENRLMT_END_DT_6
+,CHIP_ENRLMT_EFF_DT_7
+,CHIP_ENRLMT_END_DT_7
+,CHIP_ENRLMT_EFF_DT_8
+,CHIP_ENRLMT_END_DT_8
+,CHIP_ENRLMT_EFF_DT_9
+,CHIP_ENRLMT_END_DT_9
+,CHIP_ENRLMT_EFF_DT_10
+,CHIP_ENRLMT_END_DT_10
+,CHIP_ENRLMT_EFF_DT_11
+,CHIP_ENRLMT_END_DT_11
+,CHIP_ENRLMT_EFF_DT_12
+,CHIP_ENRLMT_END_DT_12
+,CHIP_ENRLMT_EFF_DT_13
+,CHIP_ENRLMT_END_DT_13
+,CHIP_ENRLMT_EFF_DT_14
+,CHIP_ENRLMT_END_DT_14
+,CHIP_ENRLMT_EFF_DT_15
+,CHIP_ENRLMT_END_DT_15
+,CHIP_ENRLMT_EFF_DT_16
+,CHIP_ENRLMT_END_DT_16
+,ELGBL_1ST_NAME
+,ELGBL_LAST_NAME
+,ELGBL_MDL_INITL_NAME
+,BIRTH_DT
+,DEATH_DT
+,AGE_NUM
+,AGE_GRP_FLAG
+,DCSD_FLAG
+,GNDR_CD
+,MRTL_STUS_CD
+,INCM_CD
+,VET_IND
+,CTZNSHP_IND
+,CTZNSHP_VRFCTN_IND
+,IMGRTN_STUS_CD
+,IMGRTN_VRFCTN_IND
+,IMGRTN_STUS_5_YR_BAR_END_DT
+,OTHR_LANG_HOME_CD
+,PRMRY_LANG_FLAG
+,PRMRY_LANG_ENGLSH_PRFCNCY_CD
+,HSEHLD_SIZE_CD
+,PRGNT_IND
+,PRGNCY_FLAG
+,CRTFD_AMRCN_INDN_ALSKN_NTV_IND
+,ETHNCTY_CD
+,ELGBL_LINE_1_ADR_HOME
+,ELGBL_LINE_2_ADR_HOME
+,ELGBL_LINE_3_ADR_HOME
+,ELGBL_CITY_NAME_HOME
+,ELGBL_ZIP_CD_HOME
+,ELGBL_CNTY_CD_HOME
+,ELGBL_STATE_CD_HOME
+,ELGBL_PHNE_NUM_HOME
+,ELGBL_LINE_1_ADR_MAIL
+,ELGBL_LINE_2_ADR_MAIL
+,ELGBL_LINE_3_ADR_MAIL
+,ELGBL_CITY_NAME_MAIL
+,ELGBL_ZIP_CD_MAIL
+,ELGBL_CNTY_CD_MAIL
+,ELGBL_STATE_CD_MAIL
+,CARE_LVL_STUS_CD
+,DEAF_DSBL_FLAG
+,BLND_DSBL_FLAG
+,DFCLTY_CONC_DSBL_FLAG
+,DFCLTY_WLKG_DSBL_FLAG
+,DFCLTY_DRSNG_BATHG_DSBL_FLAG
+,DFCLTY_ERRANDS_ALN_DSBL_FLAG
+,OTHR_DSBL_FLAG
+,HCBS_AGED_NON_HHCC_FLAG
+,HCBS_PHYS_DSBL_NON_HHCC_FLAG
+,HCBS_INTEL_DSBL_NON_HHCC_FLAG
+,HCBS_AUTSM_NON_HHCC_FLAG
+,HCBS_DD_NON_HHCC_FLAG
+,HCBS_MI_SED_NON_HHCC_FLAG
+,HCBS_BRN_INJ_NON_HHCC_FLAG
+,HCBS_HIV_AIDS_NON_HHCC_FLAG
+,HCBS_TECH_DEP_MF_NON_HHCC_FLAG
+,HCBS_DSBL_OTHR_NON_HHCC_FLAG
+,ENRL_TYPE_FLAG
+,DAYS_ELIG_IN_MO_CNT
+,ELGBL_ENTIR_MO_IND
+,ELGBL_LAST_DAY_OF_MO_IND
+,CHIP_CD
+,ELGBLTY_GRP_CD
+,PRMRY_ELGBLTY_GRP_IND
+,ELGBLTY_GRP_CTGRY_FLAG
+,MAS_CD
+,ELGBLTY_MDCD_BASIS_CD
+,MASBOE_CD
+,STATE_SPEC_ELGBLTY_FCTR_TXT
+,DUAL_ELGBL_CD
+,DUAL_ELGBL_FLAG
+,RSTRCTD_BNFTS_CD
+,SSDI_IND
+,SSI_IND
+,SSI_STATE_SPLMT_STUS_CD
+,SSI_STUS_CD
+,BIRTH_CNCPTN_IND
+,TANF_CASH_CD
+,HH_PGM_PRTCPNT_FLAG
+,HH_PRVDR_NUM
+,HH_ENT_NAME
+,MH_HH_CHRNC_COND_FLAG
+,SA_HH_CHRNC_COND_FLAG
+,ASTHMA_HH_CHRNC_COND_FLAG
+,DBTS_HH_CHRNC_COND_FLAG
+,HRT_DIS_HH_CHRNC_COND_FLAG
+,OVRWT_HH_CHRNC_COND_FLAG
+,HIV_AIDS_HH_CHRNC_COND_FLAG
+,OTHR_HH_CHRNC_COND_FLAG
+,LCKIN_PRVDR_NUM1
+,LCKIN_PRVDR_TYPE_CD1
+,LCKIN_PRVDR_NUM2
+,LCKIN_PRVDR_TYPE_CD2
+,LCKIN_PRVDR_NUM3
+,LCKIN_PRVDR_TYPE_CD3
+,LCKIN_FLAG
+,LTSS_PRVDR_NUM1
+,LTSS_LVL_CARE_CD1
+,LTSS_PRVDR_NUM2
+,LTSS_LVL_CARE_CD2
+,LTSS_PRVDR_NUM3
+,LTSS_LVL_CARE_CD3
+,MC_PLAN_ID1
+,MC_PLAN_TYPE_CD1
+,MC_PLAN_ID2
+,MC_PLAN_TYPE_CD2
+,MC_PLAN_ID3
+,MC_PLAN_TYPE_CD3
+,MC_PLAN_ID4
+,MC_PLAN_TYPE_CD4
+,MC_PLAN_ID5
+,MC_PLAN_TYPE_CD5
+,MC_PLAN_ID6
+,MC_PLAN_TYPE_CD6
+,MC_PLAN_ID7
+,MC_PLAN_TYPE_CD7
+,MC_PLAN_ID8
+,MC_PLAN_TYPE_CD8
+,MC_PLAN_ID9
+,MC_PLAN_TYPE_CD9
+,MC_PLAN_ID10
+,MC_PLAN_TYPE_CD10
+,MC_PLAN_ID11
+,MC_PLAN_TYPE_CD11
+,MC_PLAN_ID12
+,MC_PLAN_TYPE_CD12
+,MC_PLAN_ID13
+,MC_PLAN_TYPE_CD13
+,MC_PLAN_ID14
+,MC_PLAN_TYPE_CD14
+,MC_PLAN_ID15
+,MC_PLAN_TYPE_CD15
+,MC_PLAN_ID16
+,MC_PLAN_TYPE_CD16
+,MFP_LVS_WTH_FMLY_CD
+,MFP_QLFYD_INSTN_CD
+,MFP_QLFYD_RSDNC_CD
+,MFP_PRTCPTN_ENDD_RSN_CD
+,MFP_RINSTLZD_RSN_CD
+,MFP_PRTCPNT_FLAG
+,CMNTY_1ST_CHS_SPO_FLAG
+,_1915I_SPO_FLAG
+,_1915J_SPO_FLAG
+,_1932A_SPO_FLAG
+,_1915A_SPO_FLAG
+,_1937_ABP_SPO_FLAG
+,_1115A_PRTCPNT_FLAG
+,WVR_ID1
+,WVR_TYPE_CD1
+,WVR_ID2
+,WVR_TYPE_CD2
+,WVR_ID3
+,WVR_TYPE_CD3
+,WVR_ID4
+,WVR_TYPE_CD4
+,WVR_ID5
+,WVR_TYPE_CD5
+,WVR_ID6
+,WVR_TYPE_CD6
+,WVR_ID7
+,WVR_TYPE_CD7
+,WVR_ID8
+,WVR_TYPE_CD8
+,WVR_ID9
+,WVR_TYPE_CD9
+,WVR_ID10
+,WVR_TYPE_CD10
+,TPL_INSRNC_CVRG_IND
+,TPL_OTHR_CVRG_IND
+,SECT_1115A_DEMO_IND
+,NTV_HI_FLAG
+,GUAM_CHAMORRO_FLAG
+,SAMOAN_FLAG
+,OTHR_PAC_ISLNDR_FLAG
+,UNK_PAC_ISLNDR_FLAG
+,ASN_INDN_FLAG
+,CHINESE_FLAG
+,FILIPINO_FLAG
+,JAPANESE_FLAG
+,KOREAN_FLAG
+,VIETNAMESE_FLAG
+,OTHR_ASN_FLAG
+,UNK_ASN_FLAG
+,WHT_FLAG
+,BLACK_AFRCN_AMRCN_FLAG
+,AIAN_FLAG
+,RACE_ETHNCTY_FLAG
+,RACE_ETHNCTY_EXP_FLAG
+,HSPNC_ETHNCTY_FLAG
+,ELGBL_ID_ADDTNL
+,ELGBL_ID_ADDTNL_ENT_ID 
+,ELGBL_ID_ADDTNL_RSN_CHG
+,ELGBL_ID_MSIS_XWALK
+,ELGBL_ID_MSIS_XWALK_ENT_ID 
+,ELGBL_ID_MSIS_XWALK_RSN_CHG
+%mend BSF_INSERT_ORDER;
+
 %MACRO BUILD_BSF();
 
    EXECUTE(
     INSERT INTO &DA_SCHEMA..&TABLE_NAME	
-	SELECT * 
+	( %BSF_INSERT_ORDER	)
+	SELECT %BSF_INSERT_ORDER 
 	FROM BSF_&RPT_OUT._&BSF_FILE_DATE.
    ) BY TMSIS_PASSTHROUGH;
 

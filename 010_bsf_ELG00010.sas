@@ -3,24 +3,23 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_MFP_INFO and create unique output for BSF.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
+
 %macro create_ELG00010(tab_no, _2x_segment, eff_date, end_date);
 %let created_vars = 
-	case when length(trim(mfp_prtcptn_endd_rsn_cd))=1 and mfp_prtcptn_endd_rsn_cd <> '.'
-         then lpad(mfp_prtcptn_endd_rsn_cd,2,'0')
-         else mfp_prtcptn_endd_rsn_cd end as mfp_prtcptn_endd_rsn_code,
-	case when length(trim(mfp_qlfyd_instn_cd))=1 and mfp_qlfyd_instn_cd <> '.'
-         then lpad(mfp_qlfyd_instn_cd,2,'0')
-         else mfp_qlfyd_instn_cd end as mfp_qlfyd_instn_code,
-	case when length(trim(mfp_qlfyd_rsdnc_cd))=1 and mfp_qlfyd_rsdnc_cd <> '.'
-         then lpad(mfp_qlfyd_rsdnc_cd,2,'0')
-         else mfp_qlfyd_rsdnc_cd end as mfp_qlfyd_rsdnc_code,
-	case when length(trim(mfp_rinstlzd_rsn_cd))=1 and mfp_rinstlzd_rsn_cd <> '.'
-         then lpad(mfp_rinstlzd_rsn_cd,2,'0')
-         else mfp_rinstlzd_rsn_cd end as mfp_rinstlzd_rsn_code,
+	lpad(trim(mfp_prtcptn_endd_rsn_cd),2,'0') as mfp_prtcptn_endd_rsn_code,
+	lpad(trim(mfp_qlfyd_instn_cd),2,'0') as mfp_qlfyd_instn_code,
+	lpad(trim(mfp_qlfyd_rsdnc_cd),2,'0') as mfp_qlfyd_rsdnc_code,
+	lpad(trim(mfp_rinstlzd_rsn_cd),2,'0') as mfp_rinstlzd_rsn_code,
 
     1 as MFP_PARTICIPANT_FLG
 

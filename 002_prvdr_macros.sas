@@ -1,11 +1,9 @@
 %* ========================================================================== 
 ** program documentation 
 ** program     : 002_prvdr_macros.sas
-** project     : MACBIS - Provider TAF
-** programmer  : Dan Whalen and Heidi Cohen
 ** description : collection of macros used by the PRV TAF build
-** --------------------------------------------------------------------------;
-/**********************************************************************************************/
+** ==========================================================================;
+
 
 %macro upper_case (textst);
 nullif(trim(upper(&textst)),'')
@@ -31,7 +29,7 @@ nullif(trim(upper(&textst)),'')
   create table &outtbl 
          diststyle key distkey(submitting_state_prov_id) 
          compound sortkey (&&&runvars) as
-    select T.*, R.SPCL
+    select T.*
     from &intbl T
          inner join &runtbl R
 		%if (&runtyp=M) %then %do;
@@ -52,7 +50,7 @@ nullif(trim(upper(&textst)),'')
     create table &outtbl
            diststyle key distkey(submitting_state_prov_id)
            compound sortkey(tms_run_id, submitting_state, submitting_state_prov_id) as
-      select &&&collist, SPCL
+      select &&&collist
       from  &intbl
       where tms_is_active=1
       %if ("&whr" ne "") %then %do;
@@ -70,6 +68,7 @@ nullif(trim(upper(&textst)),'')
       where tms_is_active=1
 		and tms_reporting_period is not null
 		and tot_rec_cnt > 0
+		and trim(submitting_state) <> '96'
 	    %if %sysfunc(FIND(&ST_FILTER,%str(ALL))) = 0 %then %do;
         and &ST_FILTER
 	    %end;

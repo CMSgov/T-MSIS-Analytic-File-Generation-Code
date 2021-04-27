@@ -310,7 +310,7 @@
 		/* Drop some temp tables */
 
 		%drop_tables(&dtype._dates_long &dtype._ids &dtype._overlaps
-				     &dtype._nonoverlaps s&dtype._enrolled_days)
+				     &dtype._nonoverlaps &dtype._enrolled_days)
 
 	%mend dates;
 
@@ -354,7 +354,28 @@
 
 		from dates_out
 
-	) by tmsis_passthrough;
+	) by tmsis_passthrough; 
+
+/*		 &DA_RUN_ID. as DA_RUN_ID
+	 ,cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
+	         SUBMTG_STATE_CD || '-' || MSIS_IDENT_NUM) as varchar(40)) as DE_LINK_KEY
+	 ,%nrbquote('&YEAR.') as DE_FIL_DT
+	 ,%nrbquote('&VERSION.') as ANN_DE_VRSN
+	 ,SUBMTG_STATE_CD&suffix.
+	 ,MSIS_IDENT_NUM&suffix.
+
+	 execute(
+		insert into &DA_SCHEMA..TAF_ANN_DE_&tblname.
+		(&DA_RUN_ID. as DA_RUN_ID, '0000' as DE_LINK_KEY ,%nrbquote('&YEAR.') as DE_FIL_DT ,%nrbquote('&VERSION.') as ANN_DE_VRSN ,SUBMTG_STATE_CD, MSIS_IDENT_NUM )
+		select 
+			&DA_RUN_ID. as DA_RUN_ID, '0000' as DE_LINK_KEY ,%nrbquote('&YEAR.') as DE_FIL_DT ,%nrbquote('&VERSION.') as ANN_DE_VRSN ,SUBMTG_STATE_CD, MSIS_IDENT_NUM 
+			,ENRL_TYPE_FLAG
+			,ENRLMT_EFCTV_CY_DT
+			,ENRLMT_END_CY_DT
+
+		from dates_out
+
+	) by tmsis_passthrough; */
 
 	/* Now join the monthly and yearly enrolled counts to then keep to join to base.
 	   Also create flag EL_DTS_SPLMTL which = 1 for all records (and will be set to 0 for

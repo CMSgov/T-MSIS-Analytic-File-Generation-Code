@@ -10,6 +10,7 @@
 /*       all other cols into the permanent table (subset to HH_SPO_SPLMTL=1).
 /**********************************************************************************************/
 
+
 %macro create_HHSPO;
 
 	%create_temp_table(hh_spo,

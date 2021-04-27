@@ -1,16 +1,15 @@
-/**********************************************************************************************/
-/*Program: 001_base_pl.sas
-/*Author: Rosalie Malsberger, Mathematica Policy Research
-/*modified: Heidi Cohen
-/*Date: 05/2018 09/2019
-/*Purpose: Generate the annual PL segment 001: Base
-/*Mod: 
-/*Notes: This program creates all the columns for the base file. 
-/*       It takes the last best value or ever in the year value depending on element and
-/*       calculates continuous range for contract date as well as aggregates values for the new accreditation arrays.
-/*       Finally, it pulls in _SPLMTL flags.
-/*       It then inserts into the permanent table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 001_base_pl.sas
+** description : Generate the annual PL segment 001: Base
+** date        : 09/2019 12/2020
+** note        : This program creates all the columns for the base file. 
+**               It takes the last best value or ever in the year value depending on element and
+**               calculates continuous range for contract date as well as aggregates values for 
+**               the new accreditation arrays.
+**               Finally, it pulls in _SPLMTL flags.
+**               It then inserts into the permanent table.
+** ==========================================================================;
 
 %macro create_BASE;
 
@@ -89,7 +88,6 @@
 	create temp table Accreditation0 (
 		SUBMTG_STATE_CD varchar(2), 
 		MC_PLAN_ID varchar(12), 
-		splmtl_submsn_type varchar(6),
 		ACRDTN_ORG varchar(2),
 		ACRDTN_ORG_ACHVMT_DT date, 
 		ACRDTN_ORG_END_DT date
@@ -108,8 +106,8 @@
 			%let a=%sysfunc(putn(&a.,z2));
 
 			insert into Accreditation0 
-			   (SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT) 
-			   select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, ACRDTN_ORG_&a._&m., ACRDTN_ORG_ACHVMT_DT_&a._&m., ACRDTN_ORG_END_DT_&a._&m. 
+			   (SUBMTG_STATE_CD, MC_PLAN_ID, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT) 
+			   select SUBMTG_STATE_CD, MC_PLAN_ID, ACRDTN_ORG_&a._&m., ACRDTN_ORG_ACHVMT_DT_&a._&m., ACRDTN_ORG_END_DT_&a._&m. 
 					from base_pl_&year.
 					where ACRDTN_ORG_&a._&m. is not null;
 		%end;
@@ -124,14 +122,14 @@
   
 	create temp table Accreditation1
 			 diststyle key distkey(MC_PLAN_ID) as
-	  select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type,
+	  select SUBMTG_STATE_CD, MC_PLAN_ID, 
 		  ACRDTN_ORG,
 		  ACRDTN_ORG_ACHVMT_DT,
 		  ACRDTN_ORG_END_DT
 		 
 	  from Accreditation0
-	  group by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT
-	  order by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT;
+	  group by SUBMTG_STATE_CD, MC_PLAN_ID, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT
+	  order by SUBMTG_STATE_CD, MC_PLAN_ID, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT;
 	  
   ) by tmsis_passthrough;
 	                                  
@@ -141,19 +139,19 @@
   
 	create temp table Accreditation2
 			 diststyle key distkey(MC_PLAN_ID) as
-	  select  SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type,
+	  select  SUBMTG_STATE_CD, MC_PLAN_ID,
 		  ACRDTN_ORG,
 		  ACRDTN_ORG_ACHVMT_DT,
 		  ACRDTN_ORG_END_DT,
 		 /* grouping code */
 		 row_number() over (
-		   partition by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type
+		   partition by SUBMTG_STATE_CD, MC_PLAN_ID
 		   order by ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT
 		 ) as _ndx
 		 
 	  from Accreditation1
 	  
-	  order by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT;
+	  order by SUBMTG_STATE_CD, MC_PLAN_ID, ACRDTN_ORG, ACRDTN_ORG_ACHVMT_DT, ACRDTN_ORG_END_DT;
 	  
   ) by tmsis_passthrough;
 
@@ -163,14 +161,14 @@
    
     create temp table Accreditation_Array
                  diststyle key distkey(MC_PLAN_ID) as
-      select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type
+      select SUBMTG_STATE_CD, MC_PLAN_ID
              %map_arrayvars(varnm=ACRDTN_ORG, N=5)
              %map_arrayvars(varnm=ACRDTN_ORG_ACHVMT_DT, N=5)
 			 %map_arrayvars(varnm=ACRDTN_ORG_END_DT, N=5)
 			 
       from Accreditation2
 	  
-      group by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type
+      group by SUBMTG_STATE_CD, MC_PLAN_ID
 	  
   ) by tmsis_passthrough;
 
@@ -182,8 +180,7 @@
 		 /* contract start date */
 		create temp table cntrct_vert_month (
 				SUBMTG_STATE_CD varchar(2), 
-				MC_PLAN_ID varchar(12), 
-				splmtl_submsn_type varchar(6), 
+				MC_PLAN_ID varchar(12),
 				MC_EFF_DT date, 
 				MC_CNTRCT_END_DT date, 
 				mc_mnth_eff_dt date, 
@@ -198,8 +195,8 @@
 			%if %sysfunc(length(&m.)) = 1 %then %let m=%sysfunc(putn(&m.,z2));
 
 			insert into cntrct_vert_month 
-			   (SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, MC_EFF_DT,  MC_CNTRCT_END_DT, mc_mnth_eff_dt, mc_mnth_end_dt) 
-			   (select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, MC_EFF_DT, MC_CNTRCT_END_DT, MC_CNTRCT_EFCTV_DT_&m., MC_CNTRCT_END_DT_&m. 
+			   (SUBMTG_STATE_CD, MC_PLAN_ID, MC_EFF_DT,  MC_CNTRCT_END_DT, mc_mnth_eff_dt, mc_mnth_end_dt) 
+			   (select SUBMTG_STATE_CD, MC_PLAN_ID, MC_EFF_DT, MC_CNTRCT_END_DT, MC_CNTRCT_EFCTV_DT_&m., MC_CNTRCT_END_DT_&m. 
 					 from base_pl_&year.
 					 where MC_CNTRCT_EFCTV_DT_&m. is not null and MC_CNTRCT_END_DT_&m. is not null and MC_CNTRCT_EFCTV_DT_&m. <= MC_CNTRCT_END_DT);
 
@@ -212,16 +209,16 @@
 
 		create temp table srtd as 
 		select 
-			 SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, 
+			 SUBMTG_STATE_CD, MC_PLAN_ID, 
 			 MC_EFF_DT, MC_CNTRCT_END_DT,
 			 mc_mnth_eff_dt, mc_mnth_end_dt, 
 			 case (
 					least	(mc_mnth_eff_dt,
 		%do m=1 %to 11;
-						lag(mc_mnth_eff_dt,&m.) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type order by mc_mnth_end_dt desc, mc_mnth_eff_dt desc)
+						lag(mc_mnth_eff_dt,&m.) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID order by mc_mnth_end_dt desc, mc_mnth_eff_dt desc)
 			%if &m. < 11 %then , ;
 		%end;
-							) <= (lag(mc_mnth_end_dt) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type order by mc_mnth_end_dt, mc_mnth_eff_dt))  + 1
+							) <= (lag(mc_mnth_end_dt) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID order by mc_mnth_end_dt, mc_mnth_eff_dt))  + 1
 					)
 			  when true then 'C'
 			  when false then 'A'
@@ -230,24 +227,24 @@
 				as cont_rank,
 			 least	(mc_mnth_eff_dt,
 		%do m=1 %to 11;
-				lag(mc_mnth_eff_dt,&m.) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type order by mc_mnth_end_dt desc, mc_mnth_eff_dt desc)
+				lag(mc_mnth_eff_dt,&m.) over (partition by SUBMTG_STATE_CD, MC_PLAN_ID order by mc_mnth_end_dt desc, mc_mnth_eff_dt desc)
 			%if &m. < 11 %then , ;
 		%end;
 					)
 			 as new_beginning
 	   from cntrct_vert_month 
-	   group by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, MC_EFF_DT, MC_CNTRCT_END_DT, mc_mnth_eff_dt, mc_mnth_end_dt 
-	   order by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, mc_mnth_end_dt desc;
+	   group by SUBMTG_STATE_CD, MC_PLAN_ID, MC_EFF_DT, MC_CNTRCT_END_DT, mc_mnth_eff_dt, mc_mnth_end_dt 
+	   order by SUBMTG_STATE_CD, MC_PLAN_ID, mc_mnth_end_dt desc;
  
 	) by tmsis_passthrough;
 
 
     execute (
 		create temp table selected_cntrct_dt as
-		select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, new_beginning
-		from (select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, new_beginning,
-				row_number() over (partition by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type order by MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, mc_mnth_end_dt desc, mc_mnth_eff_dt desc, new_beginning) as cntrct_dt_rank
-				from srtd order by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, cont_rank
+		select SUBMTG_STATE_CD, MC_PLAN_ID, MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, new_beginning
+		from (select SUBMTG_STATE_CD, MC_PLAN_ID, MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, new_beginning,
+				row_number() over (partition by SUBMTG_STATE_CD, MC_PLAN_ID order by MC_EFF_DT, MC_CNTRCT_END_DT, cont_rank, mc_mnth_end_dt desc, mc_mnth_eff_dt desc, new_beginning) as cntrct_dt_rank
+				from srtd order by SUBMTG_STATE_CD, MC_PLAN_ID, cont_rank
 		)
 		where cntrct_dt_rank = 1;
 	) by tmsis_passthrough;
@@ -262,7 +259,7 @@
 
 		create temp table base_&year.
 	    distkey(MC_PLAN_ID) 
-		sortkey(SUBMTG_STATE_CD,MC_PLAN_ID,splmtl_submsn_type) as
+		sortkey(SUBMTG_STATE_CD,MC_PLAN_ID) as
 
 		select a.*
 			,case 
@@ -288,11 +285,11 @@
 	
 		from base_pl_&year. a
 		     left join
-		     Accreditation_Array c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.MC_PLAN_ID = c.MC_PLAN_ID and a.splmtl_submsn_type=c.splmtl_submsn_type 
+		     Accreditation_Array c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.MC_PLAN_ID = c.MC_PLAN_ID 
 		     left join
-		     (select SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type, cont_rank, new_beginning
+		     (select SUBMTG_STATE_CD, MC_PLAN_ID, cont_rank, new_beginning
 				from selected_cntrct_dt) b
-				on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.MC_PLAN_ID = b.MC_PLAN_ID and a.splmtl_submsn_type=b.splmtl_submsn_type
+				on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.MC_PLAN_ID = b.MC_PLAN_ID
  
 	) by tmsis_passthrough;
 
@@ -305,7 +302,7 @@
 	execute (
 		create temp table base_&year._final
 	    distkey(MC_PLAN_ID) 
-		sortkey(SUBMTG_STATE_CD,MC_PLAN_ID,splmtl_submsn_type) as
+		sortkey(SUBMTG_STATE_CD,MC_PLAN_ID) as
 
 		select a.*
 			   ,case when b.LCTN_SPLMTL_CT>0 then 1 else 0 end :: smallint as LCTN_SPLMTL
@@ -315,15 +312,15 @@
 
 		from base_&year. a
 		    left join
-			LCTN_SPLMTL_&year. b on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.splmtl_submsn_type=b.splmtl_submsn_type and a.MC_PLAN_ID = b.MC_PLAN_ID
+			LCTN_SPLMTL_&year. b on a.SUBMTG_STATE_CD = b.SUBMTG_STATE_CD and a.MC_PLAN_ID = b.MC_PLAN_ID
 			left join 
-			SAREA_SPLMTL_&year. c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.splmtl_submsn_type=c.splmtl_submsn_type and a.MC_PLAN_ID = c.MC_PLAN_ID
+			SAREA_SPLMTL_&year. c on a.SUBMTG_STATE_CD = c.SUBMTG_STATE_CD and a.MC_PLAN_ID = c.MC_PLAN_ID
 			left join
-			ENRLMT_SPLMTL_&year. d on a.SUBMTG_STATE_CD = d.SUBMTG_STATE_CD and a.splmtl_submsn_type=d.splmtl_submsn_type and a.MC_PLAN_ID = d.MC_PLAN_ID
+			ENRLMT_SPLMTL_&year. d on a.SUBMTG_STATE_CD = d.SUBMTG_STATE_CD and a.MC_PLAN_ID = d.MC_PLAN_ID
 			left join
-			OPRTG_AUTHRTY_SPLMTL_&year. e on a.SUBMTG_STATE_CD = e.SUBMTG_STATE_CD and a.splmtl_submsn_type=e.splmtl_submsn_type and a.MC_PLAN_ID = e.MC_PLAN_ID
+			OPRTG_AUTHRTY_SPLMTL_&year. e on a.SUBMTG_STATE_CD = e.SUBMTG_STATE_CD and a.MC_PLAN_ID = e.MC_PLAN_ID
 
-			order by SUBMTG_STATE_CD, MC_PLAN_ID, splmtl_submsn_type;
+			order by SUBMTG_STATE_CD, MC_PLAN_ID;
 
 	) by tmsis_passthrough;
 
@@ -414,6 +411,7 @@
 		insert into &DA_SCHEMA..TAF_ANN_PL_&tblname.
 		(DA_RUN_ID, PL_LINK_KEY, PL_FIL_DT, PL_VRSN, SUBMTG_STATE_CD, MC_PLAN_ID %basecols)
 		select 
+
 		    %table_id_cols
 		    %basecols
 

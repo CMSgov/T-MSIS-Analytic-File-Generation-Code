@@ -1,13 +1,13 @@
-/**********************************************************************************************/
-/*Program: 003_lctn_pr.sas
-/*modified: Heidi Cohen
-/*Date: 10/2019
-/*Purpose: Generate the annual PR segment for Location addresses
-/*Mod: 
-/*Notes: This program aggregates unique values across the CY year for variables in collist.
-/*       It creates _SPLMTL flag for base.
-/*       It inserts location records into the permanent TAF table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 003_lctn_pr.sas
+** description : Generate the annual PR segment for Location addresses
+** date        : 10/2019 12/2020
+** note        : This program aggregates unique values across the CY year for variables in collist.
+**               It creates _SPLMTL flag for base.
+**               Then inserts location records into the permanent TAF table.
+** ==========================================================================;
+
 
 %macro create_LCTN;
 
@@ -36,11 +36,8 @@
 
 	/* Insert into permanent table */
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_PR_LCTN
-		select 
-
-			%table_id_cols(loctype=1)
+		%macro basecols;
+	
 			,PRVDR_LCTN_ID
 			,PRVDR_ADR_BLG_IND
 			,PRVDR_ADR_PRCTC_IND
@@ -66,6 +63,16 @@
 			,PRVDR_LCTN_FLAG_10
 			,PRVDR_LCTN_FLAG_11
 			,PRVDR_LCTN_FLAG_12
+
+		%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_PR_LCTN
+		(DA_RUN_ID, PR_LINK_KEY, PR_LOC_LINK_KEY, PR_FIL_DT, PR_VRSN, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID %basecols)
+		select 
+
+			%table_id_cols(loctype=1)
+			%basecols
 
 		from lctn_pr_&year.
 

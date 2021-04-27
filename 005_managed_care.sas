@@ -12,6 +12,7 @@
 /*       non-null, which will be kept in a temp table to be joined to the base segment.
 /**********************************************************************************************/
 
+
 %macro create_MC;
 
 	%create_temp_table(managed_care,
@@ -83,7 +84,8 @@
 										%sum_months(ACNTBL_MC_PLAN)
 										%sum_months(HM_HOME_MC_PLAN)
 										%sum_months(IC_DUALS_MC_PLAN)
-
+										%sum_months(LTSS_PIHP_MC_PLAN)
+										%sum_months(OTHR_MC_PLAN)
 	              ) );
 
 
@@ -105,13 +107,9 @@
 
 	) by tmsis_passthrough;
 
-	/* Insert into the permanent table, subset to ANY MNGD_CARE_SPLMTL=1 */
+	/* Insert into the permanent table, subset to EITHER MNGD_CARE_SPLMTL=1 */
+	%macro basecols();
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_DE_&tblname.
-		select
-
-			%table_id_cols
 			,CMPRHNSV_MC_PLAN_MOS
 			,TRDTNL_PCCM_MC_PLAN_MOS
 			,ENHNCD_PCCM_MC_PLAN_MOS
@@ -517,6 +515,17 @@
 			,MC_PLAN_TYPE_CD16_10
 			,MC_PLAN_TYPE_CD16_11
 			,MC_PLAN_TYPE_CD16_12
+			,LTSS_PIHP_MC_PLAN_MOS
+			,OTHR_MC_PLAN_MOS
+	%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_DE_&tblname.
+		(DA_RUN_ID, DE_LINK_KEY, DE_FIL_DT, ANN_DE_VRSN, SUBMTG_STATE_CD, MSIS_IDENT_NUM %basecols)
+		select
+
+			%table_id_cols
+			%basecols
 
 		from managed_care_&year.
 		where MNGD_CARE_SPLMTL_1_3=1 or MNGD_CARE_SPLMTL_4_6=1 or

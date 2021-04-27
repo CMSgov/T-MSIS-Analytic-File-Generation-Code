@@ -1,10 +1,9 @@
 ** ========================================================================== 
 ** program documentation 
 ** program     : 101_prvdr_build.sas
-** project     : MACBIS - Provider TAF
-** programmer  : Dan Whalen
-** description : drives the provider build process
-** input data  : [RedShift Tables]
+** description : drives the provider build process and validates and recodes T-MSIS vaiables
+**               and creates constructed variables 
+** input data  : [RedShift T-MSIS Tables]
 **                File_Header_Record_Provider (segment 01)
 **                Prov_Attributes_Main  (segment 02)
 **                Prov_Location_And_Contact_Info (segment 03)
@@ -15,22 +14,22 @@
 **                Prov_Affiliated_Groups (segment 08)
 **                Prov_Affiliated_Programs (segment 09)
 **                Prov_Bed_Type_Info (segnebt 10)
-** output data : PRV_YYYYMM_yyyymmdd.sas7bdat
-**                 YYYYMM=report period
-**                 yyyymmdd=creation date
-
 ** -------------------------------------------------------------------------- 
 ** history 
 ** date        | action 
 ** ------------+------------------------------------------------------------- 
 ** 03/15/2017  | program written (D. Whalen)
 ** 07/17/2017  | program updated (H. Cohen)
-** 11/03/2017  | program updated (H. Cohen) production pre-dev
+** 11/03/2017  | program updated (H. Cohen)
 ** 07/05/2018  | program updated (H. Cohen) CCB changes
 ** 10/08/2018  | program updated (H. Cohen) CCB changes
 ** 03/25/2019  | program updated (H. Cohen) CCB changes
 ** 02/24/2020  | program updated (H. Cohen) CCB changes
-** --------------------------------------------------------------------------;
+** 06/09/2020  | program updated (H. Cohen) removed unused code for grouping records and assigning _ndx
+** 09/08/2020  | program updated (H. Cohen) CCB changes
+** 12/2020     | program updated (H. Cohen) CCB changes
+** ==========================================================================;
+
 %let taf = prv;
 
 /*get T-MSIS configuration */
@@ -127,8 +126,6 @@ run;
 %put begmon=&begmon st_dt = &st_dt TAF_FILE_DATE=&TAF_FILE_DATE RPT_PRD=&RPT_PRD;
 
 options noquotelenmax spool formdlim="~" ls=max nocenter compress=yes;
-* options noquotelenmax mprint symbolgen spool formdlim="~" ls=max nocenter compress=yes;
-* options nomprint nosymbolgen nomlogic ;
 
 title1 'MACBIS - PRV TAF';
 title2 'PRV Build';
@@ -153,21 +150,11 @@ proc sql;
             from &DA_SCHEMA..prv_frmt_name_rng order by frmt_name_txt;
   ) by tmsis_passthrough;
 
-  execute(
-    create table #SPCLlst as
-      select start, 
-	  case when label like '%CHIP' then 'CHIP'
-	       when label like '%TPA' then 'TPA'
-	  end as SPCL
-	  from PRV_formats_sm where fmtname='STFIPS' and (label like '%CHIP' or label like '%TPA')
-      order by start;
-  ) by tmsis_passthrough;
-
   %process_01_header(outtbl=#Prov01_Header);
   %process_02_main(runtbl=#Prov01_Header, 
                    outtbl=#Prov02_Main);
 
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables and sort records;
+** extract T-MSIS data apply and validate and recode source variables (as needed), use TAF variable names, add linking variables;
 
   %let srtlist = tms_run_id, 
                  submitting_state, 
@@ -179,7 +166,7 @@ proc sql;
                     fmttbl=prv_formats_sm,
                     fmtnm='STFIPC', 
                     srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
+                    newvar=SUBMTG_STATE_rcd, 
                     outtbl=#Prov02_Main_STV,
                     fldtyp=C,
 					fldlen=2);
@@ -190,7 +177,7 @@ proc sql;
                     srtvars=srtlist,
                     fmttbl=prv_formats_sm,
                     fmtnm='STFIPN', 
-                    srcvar=SUBMTG_STATE_CD,
+                    srcvar=SUBMTG_STATE_rcd,
                     newvar=State, 
                     outtbl=#Prov02_Main_ST,
                     fldtyp=C,
@@ -357,7 +344,7 @@ proc sql;
   create table #Prov02_Main_All 
                 diststyle key distkey(submitting_state_prov_id)
                 compound sortkey (tms_run_id, submitting_state, submitting_state_prov_id) as
-    select R.SPCL, %write_keyprefix(keyvars=var02nind, prefix=R), %write_keyprefix(keyvars=var02ind, prefix=T)
+    select %write_keyprefix(keyvars=var02nind, prefix=R), %write_keyprefix(keyvars=var02ind, prefix=T)
     from #Prov02_Main_NP R
          left join #Prov02_Main_GC T
            on %write_equalkeys(keyvars=srtlist, t1=R, t2=T)
@@ -377,7 +364,11 @@ proc sql;
 	         SUBMTG_STATE_CD,
 			 submitting_state_prov_id as SUBMTG_STATE_PRVDR_ID,
 			 REG_FLAG,
-			 %upper_case(prov_doing_business_as_name) as PRVDR_DBA_NAME, 
+			 case 
+			   when nullif(trim(prov_doing_business_as_name),'')='888888888888888888888888888888888888888888888888888888888888888' then ''
+			   when nullif(trim(prov_doing_business_as_name),'')='99999999999999999999999999999999999999999999999999' then ''
+			   else %upper_case(prov_doing_business_as_name)
+			 end as PRVDR_DBA_NAME, 
 			 %upper_case(prov_legal_name) as PRVDR_LGL_NAME, 
 			 %upper_case(prov_organization_name) as PRVDR_ORG_NAME, 
 			 %upper_case(prov_tax_name) as PRVDR_TAX_NAME, 
@@ -398,12 +389,7 @@ proc sql;
 			   when AGE_NUM>125 then 125
 			   else AGE_NUM
 			 end as AGE_NUM,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY
       from #Prov02_Main_All
       order by &srtlist;
   ) by tmsis_passthrough;
@@ -420,7 +406,8 @@ proc sql;
 	) by tmsis_passthrough;
   
   
- ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00003 ;
+ ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00003 ;
+
   %process_03_locations(maintbl=#Prov02_Main,
                         outtbl=#Prov03_Locations);  
 
@@ -428,37 +415,32 @@ proc sql;
                  submitting_state, 
                  submitting_state_prov_id,
 				 prov_location_id;
-  
+
   execute( 
     %recode_notnull (intbl=#Prov03_Locations,
                     srtvars=srtlistl,
                     fmttbl=prv_formats_sm,
                     fmtnm='STFIPC', 
                     srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
+                    newvar=SUBMTG_STATE_rcd, 
                     outtbl=#Prov03_Locations_STV,
                     fldtyp=C,
 					fldlen=2);
   ) by tmsis_passthrough;
-  
+   
   execute(
     create table #Prov03_Locations_link
                 diststyle key distkey(submitting_state_prov_id)
                 compound sortkey (tms_run_id, submitting_state, submitting_state_prov_id) as
       select *,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**') || '-' || SPCL) as varchar(74))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74))
-			 end as PRV_LOC_LINK_KEY
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74)) as PRV_LOC_LINK_KEY
       from #Prov03_Locations_STV
       order by &srtlistl;
   ) by tmsis_passthrough;
 
-  %let keyl = PRV_LOC_LINK_KEY;
-  
   %DROP_temp_tables(#Prov03_Locations_STV);
+ 
+  %let keyl = PRV_LOC_LINK_KEY;
 
   execute( 
     %recode_notnull (intbl=#Prov03_Locations_link,
@@ -542,7 +524,7 @@ proc sql;
     create table #Prov03_Location_BSM
                 diststyle key distkey(&keyl)
                 compound sortkey (&keyl) as
-      select &srtlistl, SPCL,
+      select &srtlistl,
 	            tms_reporting_period,
                 record_number,
                 prov_addr_type,
@@ -557,6 +539,7 @@ proc sql;
                 addr_county,
                 addr_border_state_ind,
 				SUBMTG_STATE_CD,
+				SUBMTG_STATE_rcd,
 				ADR_STATE_CD,
                 ADR_BRDR_STATE_IND,
 				PRV_LOC_LINK_KEY
@@ -569,12 +552,7 @@ proc sql;
     create table #Prov03_Location_CNST
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when T.SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || T.SUBMTG_STATE_CD || '-' || coalesce(T.submitting_state_prov_id, '*') || '-' || T.SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || T.SUBMTG_STATE_CD || '-' || coalesce(T.submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || T.SUBMTG_STATE_CD || '-' || coalesce(T.submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY,
              T.PRV_LOC_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
@@ -594,8 +572,8 @@ proc sql;
 			 T.addr_county as ADR_CNTY_CD,
 			 T.ADR_BRDR_STATE_IND,
              case
-               when L.PRVDR_ADR_SRVC_IND=1 and T.SUBMTG_STATE_CD=T.ADR_STATE_CD and T.SUBMTG_STATE_CD is not null and T.ADR_STATE_CD is not null then 0
-               when L.PRVDR_ADR_SRVC_IND=1 and T.SUBMTG_STATE_CD<>T.ADR_STATE_CD and T.SUBMTG_STATE_CD is not null and T.ADR_STATE_CD is not null then 1 
+               when L.PRVDR_ADR_SRVC_IND=1 and T.SUBMTG_STATE_rcd=T.ADR_STATE_CD then 0
+               when L.PRVDR_ADR_SRVC_IND=1 and T.SUBMTG_STATE_rcd<>T.ADR_STATE_CD then 1 
                else null 
              end :: smallint as PRVDR_SRVC_ST_DFRNT_SUBMTG_ST
       from #Prov03_Location_BSM T 
@@ -610,7 +588,6 @@ proc sql;
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, type_Prov03);
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_1_Prov03);
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_2_Prov03);
-%Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_3_Prov03);
 
   execute( 
 	drop table #Prov03_Locations_link;
@@ -621,40 +598,14 @@ proc sql;
     drop table #Prov03_Location_mapped;
   ) by tmsis_passthrough;
 
-* insert contents of temp table into final TAF file;
-  execute(
-    insert into &DA_SCHEMA..TAF_PRV_LOC
-    select *
-	from #Prov03_Location_CNST 
-  ) by tmsis_passthrough;
 
-  execute( 
-	drop table #Prov03_Location_CNST;
-  ) by tmsis_passthrough;
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00004 ;
 
-
-  ** extract licensing data;
-  ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00004 ;
-
-  %process_04_licensing (loctbl=#Prov03_Locations, 
+  %process_04_licensing (loctbl=#Prov03_Locations_g0, 
                          outtbl=#Prov04_Licensing);
 
   execute( 
-    %recode_notnull (intbl=#Prov04_Licensing,
-                    srtvars=srtlistl,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov04_Licensing_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
-  %DROP_temp_tables(#Prov04_Licensing);
-
-  execute( 
-    %recode_lookup (intbl=#Prov04_Licensing_STV,
+    %recode_lookup (intbl=#Prov04_Licensing,
                     srtvars=srtlistl,
                     fmttbl=prv_formats_sm,
                     fmtnm='LICCDV', 
@@ -665,18 +616,13 @@ proc sql;
 					fldlen=1);
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov04_Licensing_STV);
+  %DROP_temp_tables(#Prov04_Licensing);
 
   execute(
     create table #Prov04_Licensing_CNST
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**') || '-' || SPCL) as varchar(74))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74))
-			 end as PRV_LOC_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74)) as PRV_LOC_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -703,31 +649,14 @@ proc sql;
 	from #Prov04_Licensing_CNST 
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov04_Licensing_CNST);
 
-
-  ** extract identifiers data;
-  ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00005 ;
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00005 ;
  
-  %process_05_identifiers (loctbl=#Prov03_Locations, 
+  %process_05_identifiers (loctbl=#Prov03_Locations_g0, 
                            outtbl=#Prov05_Identifiers);
 
   execute( 
-    %recode_notnull (intbl=#Prov05_Identifiers,
-                    srtvars=srtlistl,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov05_Identifiers_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-  
-  %DROP_temp_tables(#Prov05_Identifiers);
-
-  execute( 
-    %recode_lookup (intbl=#Prov05_Identifiers_STV,
+    %recode_lookup (intbl=#Prov05_Identifiers,
                     srtvars=srtlistl,
                     fmttbl=prv_formats_sm,
                     fmtnm='IDCDV', 
@@ -738,18 +667,13 @@ proc sql;
 					fldlen=1);
   ) by tmsis_passthrough;
   
-  %DROP_temp_tables(#Prov05_Identifiers_STV);
+  %DROP_temp_tables(#Prov05_Identifiers);
 
   execute(
     create table #Prov05_Identifiers_CNST
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**') || '-' || SPCL) as varchar(74))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74))
-			 end as PRV_LOC_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74)) as PRV_LOC_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -775,32 +699,15 @@ proc sql;
     select *
 	from #Prov05_Identifiers_CNST 
   ) by tmsis_passthrough;
-   
-  %DROP_temp_tables(#Prov05_Identifiers_CNST);
  
 
-  ** extract bed type data;
-  ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00010 ;
+  ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00010 ;
 
-  %process_10_beds (loctbl=#Prov03_Locations, 
+  %process_10_beds (loctbl=#Prov03_Locations_g0, 
                     outtbl=#Prov10_BedType);
 
   execute( 
-    %recode_notnull (intbl=#Prov10_BedType,
-                    srtvars=srtlistl,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov10_BedType_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
-  %DROP_temp_tables(#Prov10_BedType);
-
-  execute( 
-    %recode_lookup (intbl=#Prov10_BedType_STV,
+    %recode_lookup (intbl=#Prov10_BedType,
                     srtvars=srtlistl,
                     fmttbl=prv_formats_sm,
                     fmtnm='BEDCDV', 
@@ -811,18 +718,13 @@ proc sql;
 					fldlen=1);
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov10_BedType_STV);
+  %DROP_temp_tables(#Prov10_BedType);
 
   execute(
     create table #Prov10_BedType_CNST
 		diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
 		select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**') || '-' || SPCL) as varchar(74))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74))
-			 end as PRV_LOC_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || coalesce(prov_location_id, '**')) as varchar(74)) as PRV_LOC_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -832,7 +734,7 @@ proc sql;
              BED_TYPE_CD,
              bed_count as BED_CNT
 		from #Prov10_BedType_TYP
-		where BED_TYPE_CD is not null or bed_count is not null
+		where BED_TYPE_CD is not null or (bed_count is not null and bed_count<>0)
 		order by TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID;
   ) by tmsis_passthrough;
 
@@ -848,32 +750,57 @@ proc sql;
 	from #Prov10_BedType_CNST 
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov10_BedType_CNST);
- ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00006 ;
-						
+
+  ** identify records with PRVDR_LCTN_ID=000 from segments 4, 5, and 10 after final build for those segments, which are not already in the location TAF from T-MSIS;
+  execute(
+      create table #loc_g
+				diststyle key distkey(SUBMTG_STATE_PRVDR_ID)
+				compound sortkey(TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID) as
+			select DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID
+			from (select DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID from #Prov04_Licensing_CNST where PRVDR_LCTN_ID='000'
+				union all
+				  select DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID from #Prov05_Identifiers_CNST where PRVDR_LCTN_ID='000'
+				union all
+				  select DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID from #Prov10_BedType_CNST where PRVDR_LCTN_ID='000'
+				except
+				  select DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID from #Prov03_Location_CNST where PRVDR_LCTN_ID='000')
+			group by DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID
+      order by DA_RUN_ID, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
+  ) by tmsis_passthrough;
+
+  ** add records to the location segment which have PRVDR_LCTN_ID=000 in segments' 4, 5, and 10 final build and are not already in the location segment;
+  execute(
+	  insert into #Prov03_Location_CNST (DA_RUN_ID, PRV_LINK_KEY, PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID)
+		(select DA_RUN_ID, 
+		 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(SUBMTG_STATE_PRVDR_ID, '*')) as varchar(50)) as PRV_LINK_KEY, 
+		 PRV_LOC_LINK_KEY, PRV_FIL_DT, PRV_VRSN, TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID, PRVDR_LCTN_ID from #loc_g);
+  ) by tmsis_passthrough;
+
+%Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_3_Prov03);
+
+* insert contents of final temp table into final TAF file;
+  execute(
+    insert into &DA_SCHEMA..TAF_PRV_LOC
+    select *
+	from #Prov03_Location_CNST 
+  ) by tmsis_passthrough;
+
+  execute(
+    drop table if exists #Prov04_Licensing_CNST;
+    drop table if exists #Prov05_Identifiers_CNST;
+    drop table if exists #Prov10_BedType_CNST;
+    drop table if exists #loc_g;
+	drop table if exists #Prov03_Locations_g0;
+	drop table if exists #Prov03_Location_CNST;
+  ) by tmsis_passthrough;
+  
+
+ ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00006 ;
   %process_06_taxonomy(maintbl=#Prov02_Main,
                        outtbl=#Prov06_Taxonomies);
-
-				
-** create the separate linked child table;
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables, and sort records;
-
-  execute( 
-    %recode_notnull (intbl=#Prov06_Taxonomies,
-                    srtvars=srtlist,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov06_Taxonomies_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
- 
-  %DROP_temp_tables(#Prov06_Taxonomies);
  
   execute( 
-    %recode_lookup (intbl=#Prov06_Taxonomies_STV,
+    %recode_lookup (intbl=#Prov06_Taxonomies,
                     srtvars=srtlist,
                     fmttbl=prv_formats_sm,
                     fmtnm='CLSSCDV', 
@@ -884,7 +811,7 @@ proc sql;
 					fldlen=1);
   ) by tmsis_passthrough;
  
-  %DROP_temp_tables(#Prov06_Taxonomies_STV);
+  %DROP_temp_tables(#Prov06_Taxonomies);
 
 ** validate a portion of the provider classification codes ;
 
@@ -918,16 +845,13 @@ proc sql;
  
   %DROP_temp_tables(#Prov06_Taxonomies_CCD);
 
+** create the separate linked child table;
+
   execute(
     create table #Prov06_Taxonomies_seg
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -955,7 +879,7 @@ proc sql;
  
   %DROP_temp_tables(#Prov06_Taxonomies_seg);
 
-** create the fields to merge with the root/main file ;
+** create the fields to merge with the base/main file ;
 
   execute( 
     %recode_lookup (intbl=#Prov06_Taxonomies_All,
@@ -1177,12 +1101,7 @@ proc sql;
                when PRVDR_CLSFCTN_CD='.' or PRVDR_CLSFCTN_CD is null or PRVDR_CLSFCTN_TYPE_CD='.' or PRVDR_CLSFCTN_TYPE_CD is null then null
                when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
                else 0 
-             end :: smallint as EMER_SRVCS_PRVDR_IND,
-             /* grouping code */
-             row_number() over (
-               partition by &srtlist
-               order by record_number asc
-             ) as _ndx
+             end :: smallint as EMER_SRVCS_PRVDR_IND
 			 from #Prov06_Taxonomies_MHT
 			 where PRVDR_CLSFCTN_TYPE_CD is not null and PRVDR_CLSFCTN_CD is not null
       order by &srtlist;
@@ -1238,29 +1157,13 @@ proc sql;
   %DROP_temp_tables(#Prov06_Taxonomies_CNST);
 
   
- ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00007 ;
+ ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00007 ;
   
   %process_07_medicaid(maintbl=#Prov02_Main,
                        outtbl=#Prov07_Medicaid);
 
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables, and sort records;
-
   execute( 
-    %recode_notnull (intbl=#Prov07_Medicaid,
-                    srtvars=srtlist,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov07_Medicaid_ST,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
- 
-  %DROP_temp_tables(#Prov07_Medicaid);
-  
-  execute( 
-    %recode_lookup (intbl=#Prov07_Medicaid_ST,
+    %recode_lookup (intbl=#Prov07_Medicaid,
                     srtvars=srtlist,
                     fmttbl=prv_formats_sm,
                     fmtnm='ENRSTCDV', 
@@ -1271,7 +1174,7 @@ proc sql;
 					fldlen=2);
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov07_Medicaid_ST);
+  %DROP_temp_tables(#Prov07_Medicaid);
 
 
   execute( 
@@ -1318,7 +1221,7 @@ proc sql;
   execute(
     create table #Prov07_Medicaid_CNST
                  diststyle key distkey(submitting_state_prov_id) as
-      select &srtlist, SUBMTG_STATE_CD, SPCL,
+      select &srtlist, SUBMTG_STATE_CD,
              PRVDR_MDCD_ENRLMT_STUS_CD,
 			 STATE_PLAN_ENRLMT_CD,
 			 PRVDR_MDCD_ENRLMT_MTHD_CD,
@@ -1327,20 +1230,16 @@ proc sql;
 			 prov_medicaid_eff_date as PRVDR_MDCD_EFCTV_DT,
 			 prov_medicaid_end_date as PRVDR_MDCD_END_DT,
 			 case
-               when STATE_PLAN_ENRLMT_CD=1 then 1 
+               when STATE_PLAN_ENRLMT_CD=1 or STATE_PLAN_ENRLMT_CD=3 then 1 
 			   when STATE_PLAN_ENRLMT_CD is null then null
                else 0
              end :: smallint as MDCD_ENRLMT_IND,
 			 case
-               when STATE_PLAN_ENRLMT_CD=2 then 1 
+               when STATE_PLAN_ENRLMT_CD=2 or STATE_PLAN_ENRLMT_CD=3 then 1 
 			   when STATE_PLAN_ENRLMT_CD is null then null
                else 0
              end :: smallint as CHIP_ENRLMT_IND,
-			 case
-               when STATE_PLAN_ENRLMT_CD=3 then 1 
-			   when STATE_PLAN_ENRLMT_CD is null then null
-               else 0
-             end :: smallint as MDCD_CHIP_ENRLMT_IND,
+			 null :: smallint as MDCD_CHIP_ENRLMT_IND,
 			 case
                when STATE_PLAN_ENRLMT_CD=4 then 1 
 			   when STATE_PLAN_ENRLMT_CD is null then null
@@ -1365,12 +1264,7 @@ proc sql;
                when PRVDR_MDCD_ENRLMT_STUS_CTGRY=4 then 1 
 			   when PRVDR_MDCD_ENRLMT_STUS_CTGRY is null then null
                else 0
-             end :: smallint as PRVDR_ENRLMT_STUS_TRMNTD_IND,
-             /* grouping code */
-             row_number() over (
-               partition by &srtlist
-               order by record_number asc
-             ) as _ndx
+             end :: smallint as PRVDR_ENRLMT_STUS_TRMNTD_IND
       from #Prov07_Medicaid_MTD
 	  where PRVDR_MDCD_ENRLMT_STUS_CD is not null
       order by &srtlist;
@@ -1382,12 +1276,7 @@ proc sql;
     create table #Prov07_Medicaid_ENRPOP
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -1416,7 +1305,7 @@ proc sql;
  
   %DROP_temp_tables(#Prov07_Medicaid_ENRPOP);
 
-  ** final step in creating constructed variables;
+  ** final step in creating constructed variables to join with base/main table ;
   execute (
     create table #Prov07_Medicaid_Mapped
                  diststyle key distkey(submitting_state_prov_id) as
@@ -1440,6 +1329,8 @@ proc sql;
 
   %DROP_temp_tables(#Prov07_Medicaid_CNST);
   %DROP_temp_tables(#Prov07_Medicaid_MTD);
+
+** complete base/main table ;
 
   execute(
     create table #Prov02_Base
@@ -1470,14 +1361,8 @@ proc sql;
                 M.acpt_new_ptnts_ind,
                 M.age_num,
 				coalesce(E.PRVDR_MDCD_ENRLMT_IND, 0) :: smallint as PRVDR_MDCD_ENRLMT_IND,
-				case
-				  when E.MDCD_CHIP_ENRLMT_IND=1 then 0 
-				  else E.MDCD_ENRLMT_IND
-				end :: smallint as MDCD_ENRLMT_IND,
-				case
-				  when E.MDCD_CHIP_ENRLMT_IND=1 then 0 
-				  else E.CHIP_ENRLMT_IND
-				end :: smallint as CHIP_ENRLMT_IND,
+				E.MDCD_ENRLMT_IND,
+				E.CHIP_ENRLMT_IND,
                 E.MDCD_CHIP_ENRLMT_IND,
                 E.NOT_SP_AFLTD_IND,
                 E.PRVDR_ENRLMT_STUS_ACTV_IND,
@@ -1542,51 +1427,29 @@ proc sql;
   %DROP_temp_tables(#Prov02_Base);
  
  
- ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00008 ;
+ ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00008 ;
  
   %process_08_groups(maintbl=#Prov02_Main,
                      outtbl=#Prov08_Groups);
-
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables, and sort records;
-
-  execute( 
-    %recode_notnull (intbl=#Prov08_Groups,
-                    srtvars=srtlist,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov08_Groups_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
-  %DROP_temp_tables(#Prov08_Groups);
 
   execute(
     create table #Prov08_Groups_CNST
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
 	         SUBMTG_STATE_CD,
 			 submitting_state_prov_id as SUBMTG_STATE_PRVDR_ID,
              submitting_state_prov_id_of_affiliated_entity as SUBMTG_STATE_AFLTD_PRVDR_ID
-			 from #Prov08_Groups_STV 
+			 from #Prov08_Groups 
       order by TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
   ) by tmsis_passthrough;
 
-%Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, recodes_Prov08);
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_Prov08);
 
-  %DROP_temp_tables(#Prov08_Groups_STV);
+  %DROP_temp_tables(#Prov08_Groups);
 
 * insert contents of temp table into final TAF file;
   execute(
@@ -1598,29 +1461,13 @@ proc sql;
   %DROP_temp_tables(#Prov08_Groups_CNST);
 
   
- ** Applies subsetting criteria and validate data or create constructed variables for segment PRV00009 ;
+ ** extract T-MSIS data apply subsetting criteria and validate data or create constructed variables for segment PRV00009 ;
   
   %process_09_affpgms(maintbl=#Prov02_Main,
                       outtbl=#Prov09_AffPgms);
 
-** add code to validate and recode source variables (when needed), use SAS variable names, add linking variables, and sort records;
-
   execute( 
-    %recode_notnull (intbl=#Prov09_AffPgms,
-                    srtvars=srtlist,
-                    fmttbl=prv_formats_sm,
-                    fmtnm='STFIPC', 
-                    srcvar=submitting_state,
-                    newvar=SUBMTG_STATE_CD, 
-                    outtbl=#Prov09_AffPgms_STV,
-                    fldtyp=C,
-					fldlen=2);
-  ) by tmsis_passthrough;
-
-  %DROP_temp_tables(#Prov09_AffPgms);
-
-  execute( 
-    %recode_lookup (intbl=#Prov09_AffPgms_STV,
+    %recode_lookup (intbl=#Prov09_AffPgms,
                     srtvars=srtlist,
                     fmttbl=prv_formats_sm,
                     fmtnm='PRGCDV', 
@@ -1631,7 +1478,7 @@ proc sql;
 					fldlen=1);
   ) by tmsis_passthrough;
 
-  %DROP_temp_tables(#Prov09_AffPgms_STV);
+  %DROP_temp_tables(#Prov09_AffPgms);
 
   ** remove duplicate records;
   %let grplistp = tms_run_id, 
@@ -1657,12 +1504,7 @@ proc sql;
     create table #Prov09_AffPgms_CNST
 	  diststyle key distkey(SUBMTG_STATE_PRVDR_ID) as
       select &DA_RUN_ID :: integer as DA_RUN_ID,
-			 case
-			   when SPCL is not null then
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*') || '-' || SPCL) as varchar(50))
-			   else
-			   cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50))
-			 end as PRV_LINK_KEY,
+			 cast ((%nrbquote('&VERSION.') || '-' || &monyrout. || '-' || SUBMTG_STATE_CD || '-' || coalesce(submitting_state_prov_id, '*')) as varchar(50)) as PRV_LINK_KEY,
              &TAF_FILE_DATE :: varchar(10) as PRV_FIL_DT,
 	         %nrbquote('&VERSION.') :: varchar(2) as PRV_VRSN,
 	         tms_run_id as TMSIS_RUN_ID,
@@ -1673,7 +1515,6 @@ proc sql;
 			 from #Prov09_AffPgms_TYP
       order by TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
   ) by tmsis_passthrough;
-
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, recodes_Prov09);
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_prvdr_build.sas, constructed_Prov09);
 
@@ -1687,6 +1528,7 @@ proc sql;
   ) by tmsis_passthrough;
   %DROP_temp_tables(#Prov09_AffPgms_CNST);
 
+** complete the TAF build by updating external references used for all TAF ;
 
  	sysecho 'in jobcntl updt2';
 	%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.);
@@ -1766,7 +1608,6 @@ proc sql;
 	%CREATE_EFTSMETA_INFO(&DA_SCHEMA., &DA_RUN_ID., &TABLE_NAME., 101_prvdr_build.sas, constructed_Prov08, #Prov08_Groups_CNST, submtg_state_cd);   
 	sysecho 'In file contents Header';
     %FILE_CONTENTS(&DA_SCHEMA., &TABLE_NAME.);
-
     %let TABLE_NAME = TAF_PRV_PGM;
 	%let FIL_4TH_NODE = PAP;
     sysecho 'in get cnt';

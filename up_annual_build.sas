@@ -5,6 +5,10 @@
 /*Purpose: Generate the annual UP TAF
 /*Mod: 
 /**********************************************************************************************/
+/* Copyright (C) Mathematica Policy Research, Inc.                                            */
+/* This code cannot be copied, distributed or used without the express written permission     */
+/* of Mathematica Policy Research, Inc.                                                       */ 
+/**********************************************************************************************/
 
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
@@ -141,9 +145,6 @@ QUIT;
 
 %let DA_RUN_ID=&DA_RUN_ID.;
 
-proc printto log="&basedir./logs/up_annual_build_&da_run_id..log" new;
-run;
-
 ** Create YEAR macro parm from REPORTING_PERIOD, and set other needed macro parms;
 
 data _null_;
@@ -151,6 +152,10 @@ data _null_;
 run;
 
 %let YEAR=&YEAR.;
+
+proc printto log="&basedir./logs/up_annual_build_&year._&da_run_id..log" new;
+run;
+
 %let PYEAR=%eval(&YEAR.-1);
 %let PYEAR2=%eval(&YEAR.-2);
 %let FYEAR=%eval(&YEAR.+1);

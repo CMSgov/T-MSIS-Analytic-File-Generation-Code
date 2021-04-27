@@ -1,18 +1,13 @@
 ** ========================================================================== 
 ** program documentation 
 ** program     : 003_prvdr_selection_macros.sas
-** project     : MACBIS - Provider TAF
-** programmer  : Dan Whalen
-** description : processing macros for the provider segments
-** input data  : n/a
-** output data : n/a
+** description : selection macros for the T-MSIS provider segments
 ** calls       : copy_activerows
 **               copy_activerows_nts
 **               count_rows
 **               screen_runid
 **               screen_dates
 **               remove_duprecs
-**
 ** -------------------------------------------------------------------------- 
 ** history 
 ** date        | action 
@@ -24,9 +19,9 @@
 ** 03/20/2019  | program updated (H. Cohen) CCB changes
 ** 02/24/2020  | program updated (H. Cohen) CCB changes
 ** 04/10/2020  | program updated (H. Cohen) CCB changes
-** --------------------------------------------------------------------------;
+** 09/08/2020  | program updated (H. Cohen) CCB changes
 ** ==========================================================================;
-** macros;
+
 
 page;
 
@@ -71,7 +66,6 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 
 ** --------------------------------------------------------------------------;
 
-
 ** 000-01 header segment;
 %macro process_01_header (outtbl=);
   %put NOTE: ****** PROCESS_01_HEADER Start ******;
@@ -90,23 +84,20 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
                cntvar=cnt_active, 
                outds=PRV01_Active);
 
-/* applies cutover date while identifying max run id of last successful T-MSIS load by state - results stored in combined_list */
 %AWS_MAXID_pull_non_claim (&TMSIS_SCHEMA., tmsis_fil_prcsg_job_cntl, #Prov01_Header_Copy); 
 
-/* combined_list from macro above used in creation of &outtbl so that SPCL is presevred and subsequent programming is unchanged */
+/* combined_list from macro above used in creation of &outtbl */
 
-  ** extract the latest (largest) run for each state and identify CHIP/TPA states;
+  ** extract the latest (largest) T-MSIS run id for each state;
   execute(
     create table &outtbl 
            distkey(submitting_state)
            compound sortkey(tms_run_id, submitting_state) as
-      select H.submitting_state, 
-	         S.SPCL,
-             max(H.tms_run_id) as tms_run_id
-      from #Prov01_Header_Copy H
-	    left join #SPCLlst as S on H.submitting_state=S.start
-	  where (H.submitting_state,H.tms_run_id) in (&combined_list)
-      group by H.submitting_state, S.SPCL
+      select submitting_state,
+             max(tms_run_id) as tms_run_id
+      from #Prov01_Header_Copy
+	  where (submitting_state,tms_run_id) in (&combined_list)
+      group by submitting_state
       order by submitting_state;
   ) by tmsis_passthrough;
 
@@ -139,7 +130,7 @@ page;
 %macro process_02_main (runtbl=, outtbl=);
   %put NOTE: ****** PROCESS_02_MAIN Start ******;
 
-  ** screen out all but the latest run id;
+  ** screen out all but the latest (largest) T-MSIS run id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state;
@@ -155,10 +146,12 @@ page;
                cntvar=cnt_latest, 
                outds=PRV02_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols02;
   %let cols02 = tms_run_id,
                 tms_reporting_period,
                 submitting_state,
+                submitting_state as submtg_state_cd,
                 record_number,			
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
                 prov_attributes_eff_date,
@@ -180,7 +173,7 @@ page;
                 accepting_new_patients_ind;
 				
   %local whr02;
-  %let whr02 = submitting_state_prov_id is not null;
+  %let whr02 = %upper_case(submitting_state_prov_id) is not null;
   execute( 
   %copy_activerows(intbl=#Prov02_Main_Latest1,
                      collist=cols02,
@@ -256,7 +249,7 @@ page;
 %macro process_03_locations (maintbl=, outtbl=);
   %put NOTE: ***** -process_03_loc_0_extract ------;
 
-  ** screen out all but the latest (selected) run id - provider id;
+  ** screen out all but the latest (largest) T-MSIS run id ;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -272,11 +265,13 @@ page;
                cntvar=cnt_latest, 
                outds=PRV03_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols03;
   %let cols03 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
 				%upper_case(submitting_state_prov_id) as submitting_state_prov_id,
 				%upper_case(prov_location_id) as prov_location_id,
                 prov_addr_type,
@@ -291,7 +286,6 @@ page;
                 addr_county,
                 addr_border_state_ind;
 
-  ** copy 03 (Location) provider rows;
   %local whr03;
   %let whr03 = prov_addr_type=1 or prov_addr_type=3 or prov_addr_type=4;
   execute( 
@@ -344,6 +338,36 @@ page;
                cntvar=cnt_final, 
                outds=PRV03_Final);
 
+** create a location file _g0 with only tms_run_id submitting_state submitting_state_prov_id prov_location_id, and includes records with prov_location_id=000 from segments 4, 5, and 10 that are not in the location segment;
+  execute(
+      create table #loc_g
+           diststyle key distkey(submitting_state_prov_id)
+           compound sortkey(tms_run_id, submitting_state, submitting_state_prov_id) as
+      select M.tms_run_id, M.submitting_state, M.submitting_state_prov_id, '000' as prov_location_id
+	  from &maintbl M 
+			 left join (select tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id from Prov_Licensing_Info where prov_location_id='000') L 
+			 on M.tms_run_id=L.tms_run_id and M.submitting_state=L.submitting_state and M.submitting_state_prov_id=%upper_case(L.submitting_state_prov_id)
+			 left join (select tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id from Prov_Identifiers where prov_location_id='000') I 
+			 on M.tms_run_id=I.tms_run_id and M.submitting_state=I.submitting_state and M.submitting_state_prov_id=%upper_case(I.submitting_state_prov_id)
+			 left join (select tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id from Prov_Bed_Type_Info where prov_location_id='000') B 
+			 on M.tms_run_id=B.tms_run_id and M.submitting_state=B.submitting_state and M.submitting_state_prov_id=%upper_case(B.submitting_state_prov_id)
+			 where L.prov_location_id='000' or I.prov_location_id='000' or B.prov_location_id='000'
+			 group by M.tms_run_id, M.submitting_state, M.submitting_state_prov_id
+      order by tms_run_id, submitting_state, submitting_state_prov_id;
+  ) by tmsis_passthrough;
+
+  execute(
+	  create table #Prov03_Locations_g0
+           diststyle key distkey(submitting_state_prov_id)
+           compound sortkey(tms_run_id, submitting_state, submitting_state_prov_id) as
+      select tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id 
+	  from (select tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id from &outtbl 
+			union all
+			select * from #loc_g) 
+	  group by tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id
+      order by tms_run_id, submitting_state, submitting_state_prov_id, prov_location_id;
+  ) by tmsis_passthrough;
+
   title3 "QC[03]: Summary Provider Locations Extract"; 
   select * from connection to tmsis_passthrough
    (select L.submitting_state, cnt_latest, cnt_active, cnt_date, cnt_final
@@ -364,7 +388,9 @@ page;
     drop table #Prov03_Locations_Copy;
     drop table #Prov03_Locations_Latest1;
     drop table #Prov03_Locations_Latest2;
+    drop table #loc_g;
   ) by tmsis_passthrough;
+
 %mend process_03_locations;
 
 
@@ -374,7 +400,7 @@ page;
 %macro process_04_licensing (loctbl=, outtbl=);
   %put NOTE: ****** PROCESS_04_LICENSING Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id - location id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id - location id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -392,11 +418,13 @@ page;
                cntvar=cnt_latest, 
                outds=PRV04_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols04;
   %let cols04 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
 				%upper_case(prov_location_id) as prov_location_id,
                 %upper_case(license_or_accreditation_number) as license_or_accreditation_number,
@@ -405,9 +433,8 @@ page;
                 prov_license_eff_date,
                 prov_license_end_date;
 
-  ** copy 04 (Licensing) provider rows;
   %local whr04;
-  %let whr04 = license_type is not null and license_or_accreditation_number is not null;
+  %let whr04 = license_type is not null and %upper_case(license_or_accreditation_number) is not null;
   execute( 
     %copy_activerows(intbl=#Prov04_Licensing_Latest1,
                      collist=cols04,
@@ -492,7 +519,7 @@ page;
 %macro process_05_identifiers (loctbl=, outtbl=);
   %put NOTE: ****** PROCESS_05_IDENTIFIERS Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id - location id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id - location id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -510,11 +537,13 @@ page;
                cntvar=cnt_latest, 
                outds=PRV05_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols05;
   %let cols05 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
 				%upper_case(prov_location_id) as prov_location_id,
                 %upper_case(prov_identifier) as prov_identifier,
@@ -523,9 +552,8 @@ page;
                 prov_identifier_eff_date,
                 prov_identifier_end_date;
 
-  ** copy 05 (identifiers) provider rows;
   %local whr05;
-  %let whr05 = prov_identifier_type is not null and prov_identifier is not null;
+  %let whr05 = prov_identifier_type is not null and %upper_case(prov_identifier) is not null;
   execute( 
     %copy_activerows(intbl=#Prov05_Identifiers_Latest1,
                      collist=cols05,
@@ -609,7 +637,7 @@ page;
 %macro process_06_taxonomy (maintbl=, outtbl=);
   %put NOTE: ****** PROCESS_06_TAXONOMY Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -625,11 +653,13 @@ page;
                cntvar=cnt_latest, 
                outds=PRV06_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols06;
   %let cols06 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
                 case
                   when (prov_classification_type='2' or prov_classification_type='3') and 
@@ -644,9 +674,8 @@ page;
                 prov_taxonomy_classification_eff_date,
                 prov_taxonomy_classification_end_date;
 
-  ** copy 06 (Taxonomy) provider rows;
   %local whr06;
-  %let whr06 = prov_classification_type is not null and prov_classification_code is not null;
+  %let whr06 = prov_classification_type is not null and %upper_case(prov_classification_code) is not null;
   execute( 
     %copy_activerows(intbl=#Prov06_Taxonomy_Latest1,
                      collist=cols06,
@@ -726,7 +755,7 @@ page;
 %macro process_07_medicaid (maintbl=, outtbl=);
   %put NOTE: ****** PROCESS_07_MEDICAID Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -742,11 +771,13 @@ page;
                cntvar=cnt_latest, 
                outds=PRV07_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols07;
   %let cols07 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
                 %zero_pad(prov_medicaid_enrollment_status_code, 2),
 				state_plan_enrollment,
@@ -755,7 +786,6 @@ page;
                 %fix_old_dates(prov_medicaid_eff_date),
                 %set_end_dt(prov_medicaid_end_date) as prov_medicaid_end_date;
 
-  ** copy 07 (Medicaid) provider rows;
   %local whr07;
   %let whr07 = prov_medicaid_enrollment_status_code is not null;
   execute( 
@@ -814,7 +844,6 @@ page;
          left join PRV07_Date D   on L.submitting_state=D.submitting_state
          left join PRV07_Final F  on L.submitting_state=F.submitting_state;)
     order by submitting_state;
-
   %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 003_prvdr_macros.sas, process_07_medicaid);
 
   ** clean-up;
@@ -830,12 +859,11 @@ page;
 
 %mend process_07_medicaid;
 
-
 ** 000-08 affiliated groups segment;
 %macro process_08_groups (maintbl=, outtbl=);
   %put NOTE: ****** PROCESS_08_GROUPS Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -851,19 +879,20 @@ page;
                cntvar=cnt_latest, 
                outds=PRV08_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols08;
   %let cols08 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
                 %upper_case(submitting_state_prov_id_of_affiliated_entity) as submitting_state_prov_id_of_affiliated_entity,
                 prov_affiliated_group_eff_date,
                 prov_affiliated_group_end_date;
 
-  ** copy 08 (Affiliated Groups) provider rows;
   %local whr08;
-  %let whr08 = submitting_state_prov_id_of_affiliated_entity is not null;
+  %let whr08 = %upper_case(submitting_state_prov_id_of_affiliated_entity) is not null;
   execute( 
     %copy_activerows(intbl=#Prov08_AffGrps_Latest1,
                      collist=cols08,
@@ -939,7 +968,7 @@ page;
 %macro process_09_affpgms (maintbl=, outtbl=);
   %put NOTE: ****** PROCESS_09_AFFPGMS Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -955,20 +984,21 @@ page;
                cntvar=cnt_latest, 
                outds=PRV09_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols09;
   %let cols09 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
                 %upper_case(affiliated_program_id) as affiliated_program_id,
                 affiliated_program_type,
                 prov_affiliated_program_eff_date,
                 prov_affiliated_program_end_date;
 
-  ** copy 09 (Affiliated Programs) provider rows;
   %local whr09;
-  %let whr09 = affiliated_program_id is not null;
+  %let whr09 = %upper_case(affiliated_program_id) is not null;
   execute( 
     %copy_activerows(intbl=#Prov09_AffPgms_Latest1,
                      collist=cols09,
@@ -1047,7 +1077,7 @@ page;
 %macro process_10_beds (loctbl=, outtbl=);
   %put NOTE: ****** PROCESS_10_BEDS Start ******;
 
-  ** screen out all but the latest (selected) run id - provider id - location id;
+  ** screen out all but the latest (largest) T-MSIS run id - provider id - location id;
   %local runlist;
   %let runlist = tms_run_id,
                  submitting_state,
@@ -1065,21 +1095,25 @@ page;
                cntvar=cnt_latest, 
                outds=PRV10_Latest);
 
+  ** select active records which meet segment specific criteria ;
   %local cols10;
   %let cols10 = tms_run_id,
                 tms_reporting_period,
                 record_number,
                 submitting_state,
+				submitting_state as submtg_state_cd,
                 %upper_case(submitting_state_prov_id) as submitting_state_prov_id,
 				%upper_case(prov_location_id) as prov_location_id,
                 bed_count,
-                bed_type_code,
+                case 
+                	when trim(bed_type_code) in ('1','2','3','4') then trim(bed_type_code)
+                	else null
+				end as bed_type_code,
                 bed_type_eff_date,
                 bed_type_end_date;
 
-  ** copy 10 (bed type) provider rows;
   %local whr10;
-  %let whr10 = (bed_type_code is not null and bed_type_code <> '8') or bed_count is not null;
+  %let whr10 = (trim(bed_type_code) in ('1','2','3','4')) or (bed_count is not null and bed_count<>0);
   execute( 
     %copy_activerows(intbl=#Prov10_BedType_Latest1,
                      collist=cols10,

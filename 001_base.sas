@@ -13,6 +13,7 @@
 /*       It then inserts into the permanent table.
 /**********************************************************************************************/
 
+
 %macro create_BASE;
 
 	/* Create the base segment, pulling in only non-demographic columns for which we DO NOT look to the prior year.
@@ -340,6 +341,7 @@
 			on a.submtg_state_cd = b.submtg_state_cd and
 			   a.msis_ident_num = b.msis_ident_num
 
+			   /*PG: Verify that by changing this, both base and MC files get teh new plan type cd vars*/
 			inner join 
 			MNGD_CARE_SPLMTL_&year. c
 
@@ -380,6 +382,7 @@
 	/* Create a table of all unique state/MSIS IDs from claims, to join back to Base and create dummy records for
 	   all benes with a claim and not in Base */
 
+				 /*PG: Need to address the submtg_state_cd here*/
 	execute (
 		create temp table claims_ids as
 		select distinct submtg_state_cd
@@ -401,6 +404,7 @@
 	/* Now join claim IDs to Base table. For those IDs not in Base, assign dummy rec and populate SSN_NUM with 0s.
 	   Also create combined version of state and ID which will be output */
 
+	/*PG: need to change Claims IDS here*/
 	execute (
 		create temp table base_&year._final as
 

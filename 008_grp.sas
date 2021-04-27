@@ -1,13 +1,12 @@
-/**********************************************************************************************/
-/*Program: 008_grp.sas
-/*modified: Heidi Cohen
-/*Date: 10/2019
-/*Purpose: Generate the annual PR segment for affiliated groups
-/*Mod: 
-/*Notes: This program aggregates unique values across the CY year for variables in collist.
-/*       It creates _SPLMTL flag for base.
-/*       It inserts affiliated groups records into the permanent TAF table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 008_grp.sas
+** description : Generate the annual PR segment for affiliated groups
+** date        : 10/2019 12/2020
+** note        : This program aggregates unique values across the CY year for variables in collist.
+**               It creates _SPLMTL flag for base.
+**               Then inserts affiliated groups records into the permanent TAF table.
+** ==========================================================================;
 
 %macro create_GRP;
 
@@ -24,11 +23,8 @@
 
 	/* Insert into permanent table */
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_PR_GRP
-		select 
-
-			%table_id_cols
+		%macro basecols;
+	
 			,SUBMTG_STATE_AFLTD_PRVDR_ID
 			,PRVDR_GRP_FLAG_01
 			,PRVDR_GRP_FLAG_02
@@ -42,6 +38,16 @@
 			,PRVDR_GRP_FLAG_10
 			,PRVDR_GRP_FLAG_11
 			,PRVDR_GRP_FLAG_12
+
+		%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_PR_GRP
+		(DA_RUN_ID, PR_LINK_KEY, PR_FIL_DT, PR_VRSN, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID %basecols)
+		select 
+
+			%table_id_cols
+			%basecols
 
 		from grp_pr_&year.
 

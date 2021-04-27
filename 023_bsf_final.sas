@@ -3,10 +3,16 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Combine tables from 002 through 023 to produce the final BSF file.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
 %macro hh_chk(col);
 case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 %mend hh_chk;
@@ -185,6 +191,14 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 
 			%TPL00002(20),
 
+/*			%ELG00022(21),*/
+			t21.ELGBL_ID_ADDTNL,
+			t21.ELGBL_ID_ADDTNL_ENT_ID ,
+			t21.ELGBL_ID_ADDTNL_RSN_CHG,
+			t21.ELGBL_ID_MSIS_XWALK,
+			t21.ELGBL_ID_MSIS_XWALK_ENT_ID ,
+            t21.ELGBL_ID_MSIS_XWALK_RSN_CHG ,
+
 			%nrbquote('&TAF_FILE_DATE') as BSF_FIL_DT,
 
 			%nrbquote('&VERSION') as BSF_VRSN,
@@ -211,6 +225,7 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 		%tbl_joiner(ELG00018_&BSF_FILE_DATE._uniq,18)
 		%tbl_joiner(ELG00020_&BSF_FILE_DATE._uniq,19)
 		%tbl_joiner(TPL00002_&BSF_FILE_DATE._uniq,20)
+		%tbl_joiner(ELG00022_&BSF_FILE_DATE._uniq,21)
  
     )  by tmsis_passthrough;
 
@@ -220,14 +235,15 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
                   ELG00010_&BSF_FILE_DATE._uniq ELG00011_&BSF_FILE_DATE._uniq ELG00012_&BSF_FILE_DATE._uniq
                   ELG00013_&BSF_FILE_DATE._uniq ELG00014_&BSF_FILE_DATE._uniq ELG00015_&BSF_FILE_DATE._uniq
 				  ELG00016_&BSF_FILE_DATE._uniq ELG00017_&BSF_FILE_DATE._uniq ELG00018_&BSF_FILE_DATE._uniq
-				  ELG00020_&BSF_FILE_DATE._uniq TPL00002_&BSF_FILE_DATE._uniq ELG00021_&BSF_FILE_DATE._uniq)
+				  ELG00020_&BSF_FILE_DATE._uniq TPL00002_&BSF_FILE_DATE._uniq ELG00021_&BSF_FILE_DATE._uniq
+                  ELG00022_&BSF_FILE_DATE._uniq)
 
 execute (
      create temp table BSF_&RPT_OUT._&BSF_FILE_DATE.
 	 distkey(msis_ident_num) 
      sortkey(submtg_state_cd,msis_ident_num) as
 	 select distinct
-        %FINAL_ORDER
+        %FINAL_FORMAT
 	 from BSF_STEP1
 
 		) by tmsis_passthrough;

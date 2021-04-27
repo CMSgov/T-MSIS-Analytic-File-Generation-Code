@@ -3,24 +3,25 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_ELGBLTY_DTRMNT and create unique output for BSF.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
 %macro create_ELG00005(tab_no, _2x_segment, eff_date, end_date);
-%let ELGBLTY_GRP_CODE = case when length(trim(ELGBLTY_GRP_CD))=1 and ELGBLTY_GRP_CD <> '.' 
-                             then lpad(trim(ELGBLTY_GRP_CD),2,'0')
-	                         else trim(ELGBLTY_GRP_CD) end ;
-%let DUAL_ELGBL_CODE = case when length(trim(DUAL_ELGBL_CD))=1 and DUAL_ELGBL_CD <> '.'
-                            then lpad(trim(DUAL_ELGBL_CD),2,'0')
-	                        else trim(DUAL_ELGBL_CD) end ;
+%let ELGBLTY_GRP_CODE = lpad(trim(ELGBLTY_GRP_CD),2,'0') ;
+%let DUAL_ELGBL_CODE = lpad(trim(DUAL_ELGBL_CD),2,'0') ;
 
 %let created_vars = 
     &ELGBLTY_GRP_CODE as ELGBLTY_GRP_CODE,
 	&DUAL_ELGBL_CODE as DUAL_ELGBL_CODE,
 
-	case when LENGTH(trim(CARE_LVL_STUS_CD))<3 and CARE_LVL_STUS_CD <> '.' then lpad(CARE_LVL_STUS_CD,3,'00') 
-          else CARE_LVL_STUS_CD end as CARE_LVL_STUS_CODE,
+	lpad(trim(CARE_LVL_STUS_CD),3,'0')  as CARE_LVL_STUS_CODE,
 
     case when DUAL_ELGBL_CODE in('02','04','08')      	then 1 /* Full Dual */
          when DUAL_ELGBL_CODE in('01','03','05','06')  then 2 /* Partial Dual */

@@ -1,13 +1,12 @@
-/**********************************************************************************************/
-/*Program: 006_enrlmt.sas
-/*modified: Heidi Cohen
-/*Date: 10/2019
-/*Purpose: Generate the annual PL segment for Enrollment
-/*Mod: 
-/*Notes: This program aggregates unique values across the CY year for variables in collist.
-/*       It creates _SPLMTL flag for base.
-/*       It inserts enrollment records into the permanent TAF table.
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : 006_enrlmt.sas
+** description : Generate the annual PL segment for Enrollment
+** date        : 09/2019 12/2020
+** note        : This program aggregates unique values across the CY year for variables in collist.
+**               It creates _SPLMTL flag for base.
+**               Then inserts Enrollment records into the permanent TAF table.
+** ==========================================================================;
 
 %macro create_ENRLMT;
 
@@ -23,11 +22,8 @@
 
 	/* Insert into permanent table */
 
-	execute (
-		insert into &DA_SCHEMA..TAF_ANN_PL_ENRLMT
-		select 
-
-			%table_id_cols
+	%macro basecols;
+	
 			,MC_PLAN_POP
 			,MC_ENRLMT_FLAG_01
 			,MC_ENRLMT_FLAG_02
@@ -41,6 +37,16 @@
 			,MC_ENRLMT_FLAG_10
 			,MC_ENRLMT_FLAG_11
 			,MC_ENRLMT_FLAG_12
+
+		%mend basecols;
+
+	execute (
+		insert into &DA_SCHEMA..TAF_ANN_PL_ENRLMT
+		(DA_RUN_ID, PL_LINK_KEY, PL_FIL_DT, PL_VRSN, SUBMTG_STATE_CD, MC_PLAN_ID %basecols)
+		select 
+
+			%table_id_cols
+			%basecols
 
 		from enrlmt_pl_&year.
 

@@ -1,11 +1,10 @@
-/**********************************************************************************************/
-/*Program: annual_macros_pl.sas
-/*Author: Rosalie Malsberger, Mathematica Policy Research
-/*modified: Heidi Cohen
-/*Date: 05/2018 09/2019
-/*Purpose: Macros to generate the PL TAF using the monthly MCP TAF tables
-/*Mod: 
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : annual_macros_pl.sas
+** description : Macros to generate the PL TAF using the monthly MCP TAF tables 
+** date        : 09/2019
+** ==========================================================================;
+
 /* Macro max_run_id to get the highest da_run_id for the given state for input monthly TAF. This
    table will then be merged back to the monthly TAF to pull all records for that state, month, and da_run_id.
    It is also inserted into the metadata table to keep a record of the state/month DA_RUN_IDs that make up 
@@ -145,34 +144,24 @@
    
 %macro join_monthly;
 
-%if &fil_typ.=PL %then %let file=MCP; %else %let file=PRV;
+%let file=MCP;
 
   /* Create the backbone of unique state/msis_id to then left join each month back to */
   
 	(select a.submtg_state_cd,
            b.&main_id.,
-		   b.splmtl_submsn_type,
            count(a.submtg_state_cd) as nmonths
          
 		from max_run_id_&file._&inyear. a
         inner join
-		(select *
-				,case
-					when right(&file._link_key,5)='-CHIP' then 'CHIP'
-					when right(&file._link_key,4)='-TPA' then 'TPA'
-					else ' '
-				end as splmtl_submsn_type
-			
-			from &DA_SCHEMA..taf_&fileseg. 
-		) as b
+		&DA_SCHEMA..taf_&fileseg. b
 	 
 		on a.submtg_state_cd = b.submtg_state_cd and
 	    a.&file._fil_dt = b.&file._fil_dt and
 	    a.da_run_id = b.da_run_id     
 	    
 		group by a.submtg_state_cd,
-              b.&main_id.,
-			  b.splmtl_submsn_type
+              b.&main_id.
 	) as fseg
           
    /* Now loop through each month to left join back to the backbone */
@@ -184,11 +173,6 @@
 			left join 
 			
 		(select b.*
-				,case
-					when right(b.&file._link_key,5)='-CHIP' then 'CHIP'
-					when right(b.&file._link_key,4)='-TPA' then 'TPA'
-					else ' '
-				end as splmtl_submsn_type
 		  from
 			max_run_id_&file._&inyear. a
 			inner join
@@ -202,8 +186,7 @@
 		) as m&m.
 		 
 		 on fseg.submtg_state_cd=m&m..submtg_state_cd and
-		    fseg.&main_id.=m&m..&main_id. and
-			fseg.splmtl_submsn_type=m&m..splmtl_submsn_type
+		    fseg.&main_id.=m&m..&main_id.
 
 		%end; /* end month loop */
 
@@ -214,13 +197,8 @@
 
 %macro all_monthly_segments(filet=);
 
-	/* Create file that includes state/id/submission type and other data elements for all records in the year for this segment */
+	/* Create file that includes state/id and other data elements for all records in the year for this segment */
 	select	b.* 
-			,case
-				when right(b.&filet._link_key,5)='-CHIP' then 'CHIP'
-				when right(b.&filet._link_key,4)='-TPA' then 'TPA'
-				else ' '
-			end as splmtl_submsn_type
 	from
 		 max_run_id_&filet._&year. a
 		 inner join
@@ -235,7 +213,6 @@
    the subquery, and then columns we must get from the outer query that pulls from the subquery.
    Macro parms:
 	fileseg: MCP options MCP/MCL/MCS/MCE - for OA a different method is used since no monthly supplimental file exists
-			 PRV options PRV/PRV_LOC/PRV_GRP/PRV_PGM/PRV_TAX/PRV_ENR/PRV_LIC/PRV_IDT/PRV_BED
    	tblname=table name
    	subcols=creation statements for all columns that must be pulled from the raw data in the subquery
    	outercols=creation statements for all columns that must be pulled from the subquery
@@ -248,14 +225,13 @@
 	execute(
 		create temp table &tblname._&year.
 		distkey(&main_id.)
-		sortkey(submtg_state_cd,&main_id.,splmtl_submsn_type) as
+		sortkey(submtg_state_cd,&main_id.) as
 		
 			select * &outercols.
 			
 				from (
 					select fseg.submtg_state_cd
 					       ,fseg.&main_id.
-						   ,fseg.splmtl_submsn_type
 					       &subcols.
 						   &subcols2.
 						   &subcols3.
@@ -270,8 +246,7 @@
 				) sub
 				
 		order by submtg_state_cd,
-		         &main_id.,
-				 splmtl_submsn_type				 
+		         &main_id.			 
 	
 	) by tmsis_passthrough;
 
@@ -287,7 +262,7 @@
 
   execute (
 			create table #Temp_Rollup as
-             select SUBMTG_STATE_CD, &main_id., splmtl_submsn_type, &&&collist, 
+             select SUBMTG_STATE_CD, &main_id., &&&collist, 
                     sum(case when (substring(&dtfile._fil_dt,5,2)='01') then 1 else 0 end) as _01,
                     sum(case when (substring(&dtfile._fil_dt,5,2)='02') then 1 else 0 end) as _02,
                     sum(case when (substring(&dtfile._fil_dt,5,2)='03') then 1 else 0 end) as _03,
@@ -301,11 +276,11 @@
                     sum(case when (substring(&dtfile._fil_dt,5,2)='11') then 1 else 0 end) as _11,
                     sum(case when (substring(&dtfile._fil_dt,5,2)='12') then 1 else 0 end) as _12
              from ( %all_monthly_segments(filet=&dtfile.) )
-             group by SUBMTG_STATE_CD, &main_id., splmtl_submsn_type, &&&collist
-             order by SUBMTG_STATE_CD, &main_id., splmtl_submsn_type, &&&collist;
+             group by SUBMTG_STATE_CD, &main_id., &&&collist
+             order by SUBMTG_STATE_CD, &main_id., &&&collist;
 
 			create temp table &outtbl as
-             select SUBMTG_STATE_CD, &main_id., splmtl_submsn_type, &&&collist, 
+             select SUBMTG_STATE_CD, &main_id., &&&collist, 
                     case when (_01>0) then 1 else 0 end :: smallint as &mnths._01,
                     case when (_02>0) then 1 else 0 end :: smallint as &mnths._02,
                     case when (_03>0) then 1 else 0 end :: smallint as &mnths._03,
@@ -319,7 +294,7 @@
                     case when (_11>0) then 1 else 0 end :: smallint as &mnths._11,
                     case when (_12>0) then 1 else 0 end :: smallint as &mnths._12
              from #Temp_Rollup
-             order by SUBMTG_STATE_CD, &main_id., splmtl_submsn_type, &&&collist;
+             order by SUBMTG_STATE_CD, &main_id., &&&collist;
 
            drop table #Temp_Rollup;
 
@@ -673,16 +648,15 @@
 
 		create temp table &segname._SPLMTL_&year.
 		distkey(&main_id.)
-		sortkey(submtg_state_cd,&main_id.,splmtl_submsn_type) as
+		sortkey(submtg_state_cd,&main_id.) as
 
 		select submtg_state_cd
 	   		   ,&main_id.
-			   ,splmtl_submsn_type
 			   ,count(submtg_state_cd) as &segname._SPLMTL_CT
 
 		from &segfile.
 
-		group by submtg_state_cd,&main_id.,splmtl_submsn_type
+		group by submtg_state_cd,&main_id.
 			   
 	) by tmsis_passthrough;
 
@@ -707,34 +681,14 @@
 %mend drop_tables;
 
 /* Macro table_id_cols to add the 6 cols that are the same across all tables into the final insert select
-   statement (DA_RUN_ID, &fil_typ._LINK_KEY, &fil_typ._FIL_DT, ANN_&fil_typ._VRSN, SUBMTG_STATE_CD, &main_id)
-   link key includes supplimental state submission code for 'CHIP' or 'TPA' from the monthly TAF link key.
+   statement (DA_RUN_ID, &fil_typ._LINK_KEY, &fil_typ._FIL_DT, &fil_typ._VRSN, SUBMTG_STATE_CD, &main_id)
    fil_typ - so this can be used for more than one TAF file type */
 
 %macro table_id_cols;
 
 	 &DA_RUN_ID. as DA_RUN_ID
-	 %if &fil_typ.=PL %then %do;
-		,case
-		when splmtl_submsn_type is not null and splmtl_submsn_type != ' ' then
-		cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
-				SUBMTG_STATE_CD || '-' || &main_id. || '-' || splmtl_submsn_type) as varchar(32))
-		else
-		cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
-				SUBMTG_STATE_CD || '-' || &main_id.) as varchar(32))
-		end as &fil_typ._LINK_KEY
-	 %end;
-	 %else %do;
-		,case
-		when splmtl_submsn_type is not null and splmtl_submsn_type != ' ' then
-		cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
-				SUBMTG_STATE_CD || '-' || &main_id. || '-' || splmtl_submsn_type) as varchar(56))
-		else
-		cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
-				SUBMTG_STATE_CD || '-' || &main_id.) as varchar(56))
-		end as &fil_typ._LINK_KEY
-	 %end;
-
+	 ,cast ((%nrbquote('&DA_RUN_ID.') || '-' || %nrbquote('&YEAR.') || '-' || %nrbquote('&VERSION.') || '-' ||
+				SUBMTG_STATE_CD || '-' || &main_id.) as varchar(32)) as &fil_typ._LINK_KEY
 	 ,%nrbquote('&YEAR.') as &fil_typ._FIL_DT
 	 ,%nrbquote('&VERSION.') as &fil_typ._VRSN
 	 ,SUBMTG_STATE_CD
@@ -785,7 +739,7 @@
 	     - 4th node text value
 	     - table name
 	     - year
-	     - version number (01)
+	     - version number
 	     - overall table count
 	     - run date
 	     - state code

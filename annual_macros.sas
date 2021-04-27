@@ -5,6 +5,7 @@
 /*Purpose: Macros to generate the DE TAF using the monthly BSF TAF tables
 /*Mod: 
 /**********************************************************************************************/
+
 /* Macro max_run_id to get the highest da_run_id for the given state for each input monthly TAF (DE or claims). This
    table will then be merged back to the monthly TAF to pull all records for that state, month, and da_run_id.
    It is also inserted into the metadata table to keep a record of the state/month DA_RUN_IDs that make up 
@@ -24,7 +25,7 @@
   %else %let node=BSF;
 
 	** For NON state-specific runs (where job_parms_text does not include submtg_state_cd in),
-	   pull highest da_run_id by time and state;
+	   pull highest da_run_id by time ;
 
 	execute (
 		create temp table max_run_id_&file._&inyear._nat as
@@ -739,7 +740,7 @@
    
 %macro mc_type_rank(smonth=,emonth=);
 
-	%let priorities=01 04 05 06 15 07 14 17 08 09 10 11 12 13 18 16 02 03 60 70 80 99;
+	%let priorities=01 04 05 06 15 07 14 17 08 09 10 11 12 13 19 18 16 02 03 60 70 80 20 99;
 	
 	%do m=&smonth. %to &emonth.;
 	
@@ -821,6 +822,10 @@
 
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('17'), PACE_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('18'), PHRMCY_PAHP_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
+
+	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('19'), LTSS_PIHP_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
+	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('20'), OTHR_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
+
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('60'), ACNTBL_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('70'), HM_HOME_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('80'), IC_DUALS_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
@@ -870,14 +875,12 @@
 						/* OR non-0, 8, 9 only or non-null ID */
 
 						(nullif(trim(m&m..MC_PLAN_ID&s.),'') is not null and 
-
                         trim(m&m..MC_PLAN_ID&s.) not in ('0','00','000','0000','00000','000000','0000000',
 						                                 '00000000','000000000','0000000000','00000000000','000000000000',
 														 '8','88','888','8888','88888','888888','8888888',
 						                                 '88888888','888888888','8888888888','88888888888','888888888888',
 														 '9','99','999','9999','99999','999999','9999999',
 						                                 '99999999','999999999','9999999999','99999999999','999999999999')) )
-
                            %if &m.<&emonth. or &s.<&nmcslots. %then %do; or %end;
 
 					 %end;
@@ -1048,7 +1051,7 @@
 
 	  ) by tmsis_passthrough;
 
-	  %drop_tables(state_counts)
+	  %drop_tables(state_counts);
 
 
 %mend create_efts_metadata;

@@ -16,7 +16,9 @@
 /*				9/19/2019 - DB modified to apply CCB Data-Cleaning Business Rules - 2019 Q3                 */
 /*							Upcased ICN ORIG and ICN ADJSTMT at the FA Header/Line Join						*/
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
-/*                                                                                                          */
+/*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
+/*							-MACTAF-1583: Recode Tot_bill_amt value 9999999999.99 to Null                   */
+/*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 
@@ -55,14 +57,7 @@ execute (
         row_number() over (partition by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND 
 		order by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND,A.TMSIS_FIL_NAME,A.REC_NUM ) as RN  
 
-		,CASE
-		WHEN A.SUBMTG_STATE_CD = '97' THEN '42'
-		WHEN A.SUBMTG_STATE_CD = '96' THEN '19'
-	    WHEN A.SUBMTG_STATE_CD = '94' THEN '30'
-	    WHEN A.SUBMTG_STATE_CD = '93' THEN '56'
-		ELSE A.SUBMTG_STATE_CD
-		END AS NEW_SUBMTG_STATE_CD_LINE
-
+			,a.submtg_state_cd as new_submtg_state_cd_line
 		from	&FL2._LINE_IN as A inner join FA_HDR_&FL. H
 
 		on   	H.TMSIS_RUN_ID = A.TMSIS_RUN_ID_LINE and
@@ -212,7 +207,7 @@ execute (
 	,%var_set_type1(RMTNC_NUM)
     ,%var_set_type6(DAILY_RATE,  cond1=88888, cond2=88888.80, cond3=88888.88)
 	,%var_set_type2(PYMT_LVL_IND,0,cond1=1,cond2=2) 
-	,%var_set_type6(TOT_BILL_AMT, 		cond1=999999.00, cond2=888888888.88, cond3=9999999.99, cond4=99999999.90, cond5=999999.99)
+	,%var_set_type6(TOT_BILL_AMT, 		cond1=999999.00, cond2=888888888.88, cond3=9999999.99, cond4=99999999.90, cond5=999999.99, cond6=9999999999.99)
 	,%var_set_type6(TOT_ALOWD_AMT,		cond1=99999999, cond2=888888888.88)
 	,%var_set_type6(TOT_MDCD_PD_AMT,	cond1=888888888.88)
 	,%var_set_type6(TOT_COPAY_AMT, 		cond1=888888888.88, cond2=9999999.99, cond3=88888888888.00)
@@ -273,6 +268,10 @@ execute (
 	,OT_SUD_TAXONOMY_IND
 	,cast(nullif(IAP_CONDITION_IND, IAP_CONDITION_IND) as char(6)) as IAP_COND_IND
 	,cast(nullif(PRIMARY_HIERARCHICAL_CONDITION, PRIMARY_HIERARCHICAL_CONDITION) as char(9)) as PRMRY_HIRCHCL_COND
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_ADD_TS
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_UPDT_TS 
+	,%fix_old_dates(SRVC_ENDG_DT_DRVD)
+	,%var_set_type2(SRVC_ENDG_DT_CD,0,cond1=1,cond2=2,cond3=3,cond4=4,cond5=5)
 
 	from 	(select *,
      case when ADJSTMT_IND is NOT NULL and    
@@ -507,7 +506,7 @@ execute (
 , coalesce(a.ADJDCTN_DT, '01JAN1960') as ADJDCTN_DT
 , coalesce(upper(a.ADJSTMT_IND),'X') as ADJSTMT_IND                                   
 , upper(a.ADJSTMT_RSN_CD) as adjstmt_rsn_cd                              
-, coalesce(a.SRVC_BGNNG_DT,'01JAN1960') as SRVC_BGNNG_DT_HEADER                                    
+, coalesce(a.SRVC_BGNNG_DT,'01JAN1960') as SRVC_BGNNG_DT_HEADER  
 , a.BENE_COINSRNC_AMT                        
 , a.BENE_COINSRNC_PD_DT                   
 , a.BENE_COPMT_AMT                               
@@ -620,6 +619,11 @@ execute (
 , a.TOT_MDCD_PD_AMT                           
 , a.TOT_OTHR_INSRNC_AMT 
 , a.TOT_TPL_AMT         
+, coalesce(a.SRVC_ENDG_DT,a.SRVC_BGNNG_DT) as SRVC_ENDG_DT_DRVD_H
+, case when a.SRVC_ENDG_DT is not null then '2' 
+	   when a.SRVC_ENDG_DT is null and a.SRVC_BGNNG_DT is not null then '3'
+	   else null
+  end  as SRVC_ENDG_DT_CD_H
 
 %mend COT00002;
 

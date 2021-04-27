@@ -3,11 +3,10 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_ENRLMT_TIME_SGMT_DATA and create unique output for BSF.
-/*Mod: 4/4/2018 - Complete rewrite for CCB to incorporate multiple spells.
+/*Mod: 4/4/2018 - Complete rewrite for CCB to incorporate multiple spells. 
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
 
- 
 %macro process_enrlmt(type,enrl_type_cd);
 /** Step 0: A) Set effective and end dates to death date if death date occurs before. **/
 /**         B) Set null end dates to December 31, 9999 **/
@@ -256,7 +255,7 @@ execute (
 	 sortkey(submtg_state_cd,msis_ident_num) as
 	 select 
         b.submtg_state_cd 
-        ,b.msis_ident_num 	    
+        ,b.msis_ident_num        
 		,max(b.tmsis_run_id) as tmsis_run_id
 
 		%do I=1 %to &DAYS_IN_MONTH;
@@ -364,6 +363,8 @@ execute (
          when ST_ABBREV in('CO','MT','ND','SD','UT','WY')			then '08'
          when ST_ABBREV in('AZ','CA','HI','NV','AS','GU','MP')		then '09'
          when ST_ABBREV in('AK','ID','OR','WA')						then '10'
+		 when c.submtg_state_cd = '97' 								then '03'
+		 when c.submtg_state_cd in ('93','94')                      then '08'
          else '11' end as REGION
         from &tab_no._combined c
 		/* Add ssn_ind from initial max ID pull */

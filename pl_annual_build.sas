@@ -1,13 +1,12 @@
-/**********************************************************************************************/
-/*Program: pl_annual_build.sas
-/*Author: Rosalie Malsberger, Mathematica Policy Research
-/*modified for PL: Heidi Cohen
-/*Date: 05/2018 09/2019
-/*Purpose: Generate the annual PL TAF using the monthly MCP TAF tables
-/*Mod: 
-/*Notes: Program includes annual_macro.sas to create each
-/*       of the five annual tables
-/**********************************************************************************************/
+** ========================================================================== 
+** program documentation 
+** program     : pl_annual_build.sas
+** description : Generate the annual PL TAF using the monthly MCP TAF tables 
+** date        : 09/2019
+** Notes       : Program includes annual_macro_pl.sas and 001_base_pl.sas -- 006_enrlmt.sas 
+**               to create each of the annual tables
+** ==========================================================================;
+
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
 %include &tms_config_macro;
@@ -71,7 +70,7 @@ options noerrorabend;
 %include "&basedir./programs/005_oa.sas";
 %include "&basedir./programs/006_enrlmt.sas";
 
-/* Set the global macros :
+/* Set the global macro variables :
 	 - REPORTING_PERIOD: Date value from which we will take the last 4 characters to determine year
                          (read from job control table)
      - YEAR: Year of annual file (created from REPORTING_PERIOD)
@@ -87,13 +86,6 @@ options noerrorabend;
                   in the da_config_macro above
      - ST_FILTER: List of states to run (if no states are listed, then take all) (read from job control
                   table)
-     - PYEARS: Prior years (all years from 2014 to current year minus 1)
-     - GETPRIOR: Indicator for whether there are ANY records in the prior yeara to do prior year lookback.
-                 If yes, set = 1 and look to prior yeara to get demographic information if current year
-                 is missing for each enrollee/demographic column. This will be determined with the macro
-                 count_prior_year
-     - NMCSLOTS: # of monthly slots for MC IDs/types (currently 16, set below) 
-     - NWAIVSLOTS: # of waiver slots for waiver IDs/types (currently 10, set below)
      - MONTHSB: List of months backwards from December to January (to loop through when needed) */
 
 
@@ -106,12 +98,8 @@ options noerrorabend;
 %GLOBAL TMSIS_SCHEMA;
 %GLOBAL DA_SCHEMA;
 %GLOBAL ST_FILTER;
-%GLOBAL GETPRIOR;
-%GLOBAL PYEARS;
-%GLOBAL NMCSLOTS;
-%GLOBAL NWAIVSLOTS;
 
-/* these macro variables allow some code to be used by both PL and PR annual builds */
+/* these macro variables allow some macros to be used by both PL and PR annual builds */
 
 %let FIL_TYP=PL;
 %let LFIL_TYP=%qlowcase(&fil_typ);
@@ -135,9 +123,6 @@ QUIT;
 
 %let DA_RUN_ID=&DA_RUN_ID.;
 
-proc printto log="&basedir./logs/&lfil_typ._annual_build_&da_run_id..log" new;
-run;
-
 /* Create YEAR macro parm from REPORTING_PERIOD, and set other needed macro parms */
 
 data _null_;
@@ -147,6 +132,9 @@ run;
 %let YEAR=&YEAR.;
 
 %let MONTHSB=12 11 10 09 08 07 06 05 04 03 02 01;
+
+proc printto log="&basedir./logs/&lfil_typ._annual_build_&year._&da_run_id..log" new;
+run;
 
 options nosymbolgen nomlogic nomprint nospool;
 

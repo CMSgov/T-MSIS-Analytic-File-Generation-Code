@@ -16,7 +16,8 @@
 /*				9/22/2019 - DB modified to apply CCB Data-Cleaning Business Rules - 2019 Q3                 */
 /*							Upcased ICN ORIG and ICN ADJSTMT at the FA Header/Line Join						*/
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
-/*                                                                                                          */
+/*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
+/*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source
 		noerrorabend;
@@ -56,14 +57,7 @@ execute (
         row_number() over (partition by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND 
 		order by A.SUBMTG_STATE_CD,A.ORGNL_CLM_NUM_LINE,A.ADJSTMT_CLM_NUM_LINE,A.ADJDCTN_DT_LINE,A.LINE_ADJSTMT_IND,A.TMSIS_FIL_NAME,A.REC_NUM ) as RN  
 
-		,CASE
-		WHEN A.SUBMTG_STATE_CD = '97' THEN '42'
-		WHEN A.SUBMTG_STATE_CD = '96' THEN '19'
-	    WHEN A.SUBMTG_STATE_CD = '94' THEN '30'
-	    WHEN A.SUBMTG_STATE_CD = '93' THEN '56'
-		ELSE A.SUBMTG_STATE_CD
-		END AS NEW_SUBMTG_STATE_CD_LINE
-
+			,a.submtg_state_cd as new_submtg_state_cd_line
 		from	&FL2._LINE_IN as A inner join FA_HDR_&FL. H
 
 		on   	H.TMSIS_RUN_ID = A.TMSIS_RUN_ID_LINE and

@@ -3,15 +3,18 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_MC_PRTCPTN_DATA and create unique output for BSF.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
 %macro create_ELG00014(tab_no, _2x_segment, eff_date, end_date);
-%let ENRLD_MC_PLAN_TYPE_CODE = 
-case  when length(trim(enrld_mc_plan_type_cd))=1 
-      and trim(enrld_mc_plan_type_cd) <> '' 
-      then lpad(enrld_mc_plan_type_cd,2,'0') else enrld_mc_plan_type_cd end;
+%let ENRLD_MC_PLAN_TYPE_CODE = lpad(trim(enrld_mc_plan_type_cd),2,'0');
 
 %let mc_plan =
 case when trim(mc_plan_id)  in ('0','00','000','0000','00000','000000','0000000',

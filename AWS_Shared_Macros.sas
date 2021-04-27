@@ -30,7 +30,13 @@
 /*              9/18/2019 - DB/AL modified to apply CCB Data-Cleaning Business Rules - 2019 Q3.xlsx         */
 /*						    modified macro var_set_fills to remove translate of dots to missing             */
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
-/*                                                                                                          */
+/*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
+/*							-MACTAF-1581: Mod macro var_set_tos to include new value 145                    */
+/*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
+/*							-MACTAF-1564: Add TAF selection date to the IP and OT headers					*/
+/*				3/4/2021  - DB modified to apply TAF CCB 2021 Q1 V5.1 Change Request						*/
+/*							-MACTAF-1680: Add codes '46-'46B' to xix_srvc_ctgry_cd							*/
+/*							-MACTAF-1682: Mod macro var_set_tos to include new value 146					*/
 /************************************************************************************************************/
 
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
@@ -279,7 +285,7 @@ select * from connection to tmsis_passthrough
 		(
 		select &da_run_id. as da_run_id,
                 &&pgm_audt_cnt_id&j. as pgm_audt_cnt_id,
-                 t1.state as submtg_state_cd,
+                t1.state as submtg_state_cd,
 				t1.cnt as audt_cnt_val
 		from 
 	    (
@@ -290,8 +296,9 @@ select * from connection to tmsis_passthrough
 		) as t2
 		union 
 		select &da_run_id. as da_run_id,
-                &&pgm_audt_cnt_id&j. as pgm_audt_cnt_id, 'xx' as submtg_state_cd, 0 as audt_cnt_val
-
+                &&pgm_audt_cnt_id&j. as pgm_audt_cnt_id, 
+				'xx' as submtg_state_cd, 
+				0 as audt_cnt_val
 		
      )by tmsis_passthrough;
 
@@ -366,7 +373,7 @@ select * from connection to tmsis_passthrough
 		(
 		select &da_run_id. as da_run_id,
                 &&pgm_audt_cnt_id&j. as pgm_audt_cnt_id,
-                 t1.state as submtg_state_cd,
+                t1.state as submtg_state_cd,
 				t1.cnt as audt_cnt_val
 		from 
 	    (
@@ -418,8 +425,10 @@ select * from connection to tmsis_passthrough
 	(	
 		insert into &DA_SCHEMA..PGM_AUDT_CNTS
 		select da_run_id, pgm_audt_cnt_id, nullif(submtg_state_cd, 'xx'),audt_cnt_val from row_count&j.
+		%if &rtcnt. > 1 %then %do;
+			where submtg_state_cd <> 'xx'
+		%end;
 		order by audt_cnt_val desc
-		limit &rtcnt.
 		 
 		
      )by tmsis_passthrough;
@@ -458,6 +467,8 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	   %end;
 
 	   and submtg_state_cd in(&CUTOVER_FILTER)
+
+	   and submtg_state_cd <> '96'
 
 	group by submtg_state_cd)
     order by submtg_state_cd;
@@ -511,8 +522,8 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 			)
 			and                    	
 	         A.TMSIS_ACTV_IND = 1 and										    /* record is active and */
-			(A.CLM_STUS_CTGRY_CD <> 'F2' or A.CLM_STUS_CTGRY_CD is null) and  	/* claim status is not denied or null and */
-            (A.CLM_TYPE_CD <> 'Z' or A.CLM_TYPE_CD is null) and					/* claim type is not Z or null and */
+			(upper(A.CLM_STUS_CTGRY_CD) <> 'F2' or A.CLM_STUS_CTGRY_CD is null) and  	/* claim status is not denied or null and */
+            (upper(A.CLM_TYPE_CD) <> 'Z' or A.CLM_TYPE_CD is null) and					/* claim type is not Z or null and */
 			(A.CLM_DND_IND <> '0' or A.CLM_DND_IND is null) and					/* claim denied indicator is not 0 or null */
 			(A.CLM_STUS_CD NOT IN('26','87','026','087','542','585','654') or A.CLM_STUS_CD is null) and /* claim status code is not 26, 87, 542, 585, or 654 */
 			(A.ADJSTMT_IND <> '1' or A.ADJSTMT_IND IS NULL) 	
@@ -583,7 +594,7 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 		 			,H.ADJSTMT_IND 
 					,MAX(L.SRVC_ENDG_DT) as SRVC_ENDG_DT
 					,MAX(L.SRVC_BGNNG_DT) as SRVC_BGNNG_DT 
-
+					
   					from  HEADER2_&fl H inner join &TMSIS_SCHEMA..TMSIS_CLL_REC_&fl L   							
 
   					on    H.TMSIS_RUN_ID = L.TMSIS_RUN_ID and
@@ -671,6 +682,8 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
     sortkey(TMSIS_RUN_ID,SUBMTG_STATE_CD,ORGNL_CLM_NUM,ADJSTMT_CLM_NUM,ADJDCTN_DT,ADJSTMT_IND) as 
      (select A.TMSIS_RUN_ID ,A.ORGNL_CLM_NUM ,A.ADJSTMT_CLM_NUM ,A.SUBMTG_STATE_CD ,A.ADJDCTN_DT 
             ,A.ADJSTMT_IND 
+			,null as SRVC_ENDG_DT_DRVD_L
+			,null as SRVC_ENDG_DT_CD_L
      from HEADER2_&FL A 
 	 where
 	 %if &FL=IP %then %do; A.NO_DISCH_DT = 0 %end;
@@ -678,6 +691,12 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
       union all 
       select B.TMSIS_RUN_ID ,B.ORGNL_CLM_NUM ,B.ADJSTMT_CLM_NUM ,B.SUBMTG_STATE_CD ,B.ADJDCTN_DT 
             ,B.ADJSTMT_IND 
+			,case when nullif(B.SRVC_ENDG_DT,'01JAN1960') is null or SRVC_ENDG_DT is null then SRVC_BGNNG_DT
+				  else SRVC_ENDG_DT end as SRVC_ENDG_DT_DRVD_L
+			,case when nullif(B.SRVC_ENDG_DT,'01JAN1960') is not null and SRVC_ENDG_DT is not null then '4'
+				  when nullif(B.SRVC_BGNNG_DT,'01JAN1960') is not null and SRVC_BGNNG_DT is not null then '5' 
+				  else null
+			 end  as SRVC_ENDG_DT_CD_L
      from NO_DISCHARGE_DATES B )
 
 	) by tmsis_passthrough;
@@ -726,14 +745,11 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	as
 
     select A.*
-	      ,CASE
-			  WHEN H.SUBMTG_STATE_CD = '97' THEN '42'
-  			  WHEN H.SUBMTG_STATE_CD = '96' THEN '19'
-			  WHEN H.SUBMTG_STATE_CD = '94' THEN '30'
-			  WHEN H.SUBMTG_STATE_cD = '93' THEN '56'
-			  ELSE H.SUBMTG_STATE_CD
-             END AS NEW_SUBMTG_STATE_CD
-
+			,h.submtg_state_cd as new_submtg_state_cd
+		%if &fl in(IP OTHR_TOC) %then %do;
+			,coalesce(A.SRVC_ENDG_DT_DRVD_H,H.SRVC_ENDG_DT_DRVD_L) as SRVC_ENDG_DT_DRVD
+			,coalesce(A.SRVC_ENDG_DT_CD_H,H.SRVC_ENDG_DT_CD_L) as SRVC_ENDG_DT_CD
+		%end;
 	from ALL_HEADER_&FL. H 
 
 	/** Join de-duped HEADER finder file to T-MSIS HEADER FILE **/
@@ -895,9 +911,7 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	   
 %mend var_set_type4;
 
-
 %macro var_set_type5 (var,lpad=2,lowerbound=1,upperbound=10,multiple_condition=NO);
-
 case when &var is not NULL and regexp_count(lpad(&var,&lpad,'0'),%nrbquote('[0-9]{&lpad}')) > 0 then 
 	 case when (&var::smallint >= &lowerbound and &var::smallint <= &upperbound) then lpad(&var,&lpad,'0')
 	      else NULL
@@ -960,7 +974,7 @@ case when lpad(&var,2,'0') in('01','02','03','04','05','06','07','08','09',
 
 case when regexp_count(lpad(&var,3,'0'),'[0-9]{3}') > 0 then 
 	 case when ((&var::smallint >= 1 and &var::smallint <= 93) or
-			    (&var::smallint in (115,119,120,121,122,123,127,131,134,135,136,137,138,139,140,141,142,143,144))) 
+			    (&var::smallint in (115,119,120,121,122,123,127,131,134,135,136,137,138,139,140,141,142,143,144,145,146))) 
 		  then lpad(&var,3,'0')
 	 end
 	 else NULL
@@ -1180,6 +1194,14 @@ end  as &var
 	'0043',
 	'0044',
 	'0045',   /* added to set 6/9/2020 */
+	'0046',	  /* added to set 3/4/2021 */ 
+	'46A1',   /* added to set 3/4/2021 */   
+	'46A2',   /* added to set 3/4/2021 */   
+	'46A3',   /* added to set 3/4/2021 */   
+	'46A4',   /* added to set 3/4/2021 */   
+	'46A5',   /* added to set 3/4/2021 */ 
+	'46A6',   /* added to set 3/4/2021 */   
+	'046B',   /* added to set 3/4/2021 */   
 	'0049',
 	'0050');
 	

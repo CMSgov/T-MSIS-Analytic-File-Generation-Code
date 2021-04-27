@@ -10,6 +10,7 @@
 /*       flag only is kept in a temp table to be joined to the base table.
 /**********************************************************************************************/
 
+
 %macro create_MFP;
 
 	%create_temp_table(mfp,

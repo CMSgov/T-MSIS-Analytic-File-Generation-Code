@@ -3,10 +3,16 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_PRMRY_DMGRPHC_ELGBLTY and create unique output for BSF.
-/*Mod: 
+/*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
- 
+/* © 2020 Mathematica Inc. 																	  */
+/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
+/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
+/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
+/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
+/**********************************************************************************************/
+
 %macro create_ELG00002(tab_no, _2x_segment, eff_date, end_date);
 %let deceased_flag= case when DEATH_DT is not null and date_cmp(DEATH_DT,&RPT_PRD) in(-1,0) then 1 else 0 end;
 %let created_vars = upper(GNDR_CD) as GNDR_CODE;

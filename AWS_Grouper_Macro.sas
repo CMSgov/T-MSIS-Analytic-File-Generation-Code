@@ -1,10 +1,3 @@
-/**********************************************************************************************/
-/* © 2020 Mathematica Inc. 										 	 					      */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  						     	  */
-/**********************************************************************************************/
 
 /* spell these out */
 %macro otmh9f;
