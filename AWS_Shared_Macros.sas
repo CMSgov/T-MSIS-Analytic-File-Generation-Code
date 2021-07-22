@@ -37,6 +37,10 @@
 /*				3/4/2021  - DB modified to apply TAF CCB 2021 Q1 V5.1 Change Request						*/
 /*							-MACTAF-1680: Add codes '46-'46B' to xix_srvc_ctgry_cd							*/
 /*							-MACTAF-1682: Mod macro var_set_tos to include new value 146					*/
+/*				6/7/2021  - DB modified to apply TAF CCB 2021 Q2 V6.0 Change Request						*/
+/*							-MACTAF-1706: Add codes '2C,18A5'  to xix_srvc_ctgry_cd							*/
+/*							-MACTAF-1708: Mod macro var_set_poa to include code '1'							*/
+/*							-MACTAF-1719: Hard code exclusion of MT TPA (state code 94) from TAF            */
 /************************************************************************************************************/
 
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
@@ -469,6 +473,8 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	   and submtg_state_cd in(&CUTOVER_FILTER)
 
 	   and submtg_state_cd <> '96'
+
+	   and submtg_state_cd <> '94'
 
 	group by submtg_state_cd)
     order by submtg_state_cd;
@@ -1009,7 +1015,7 @@ end  as &var
 
 %macro var_set_poa (var);
 
-case when (upper(&var) in ('Y','N','U','W')) then upper(&var)
+case when (upper(&var) in ('Y','N','U','W','1')) then upper(&var)
 	else NULL
  end as &var
 
@@ -1121,6 +1127,7 @@ end  as &var
 	'001D',
 	'002A',
 	'002B',
+	'002C',  /* DB added 6/7/2021 */
 	'003A',
 	'003B',
 	'004A',
@@ -1158,6 +1165,7 @@ end  as &var
 	'18A2',
 	'18A3',
 	'18A4',
+	'18A5',    /* DB Added 6/7/2021 */
 	'18B1',
 	'18B2',
 	'018C',

@@ -28,6 +28,7 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 	where  job_stus = 'success'
 		and tot_actv_rcrds_elg02 > 0
 		and submtg_state_cd <> '96'
+		and submtg_state_cd <> '94'
 
 	     %if %sysfunc(FIND(&ST_FILTER,%str(ALL))) = 0 %then %do;
          and &ST_FILTER
