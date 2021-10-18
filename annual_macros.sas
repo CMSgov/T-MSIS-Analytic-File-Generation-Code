@@ -3,8 +3,12 @@
 /*Author: Rosalie Malsberger, Mathematica Policy Research
 /*Date: 05/2018
 /*Purpose: Macros to generate the DE TAF using the monthly BSF TAF tables
-/*Mod: 
+/*Mod: Preeti Gill 5/5/2020 Incorporated a 2 year look back using the DE, instead of BSF.
+			                Changes include modifying the method of pulling the RUN IDs.
+	   Preeti Gill 7/7/2021 Added a new macro to adjust the definition of age_num; in the instance of a look back 
+							the variable is recreated instead of relying on prior history.
 /**********************************************************************************************/
+
 
 /* Macro max_run_id to get the highest da_run_id for the given state for each input monthly TAF (DE or claims). This
    table will then be merged back to the monthly TAF to pull all records for that state, month, and da_run_id.
@@ -21,8 +25,12 @@
   %if &tbl. =  %then %let tbl=taf_&file.h;
   %if &inyear. = %then %let inyear=&year.;
 
-  %if &file. ne BSF %then %let node=&file.H;
-  %else %let node=BSF;
+  %if &file. ne BSF and &file. ne DE %then %let node=&file.H;
+  %else %if &file. eq BSF %then %let node = BSF;
+  %else %if &file. eq DE %then %let node = BSE;
+
+  %if &node = BSE %then %let alt_node_cond = %str(and otpt_name = 'TAF_ANN_DE_BASE');
+  %else %let alt_node_cond = %str();
 
 	** For NON state-specific runs (where job_parms_text does not include submtg_state_cd in),
 	   pull highest da_run_id by time ;
@@ -113,7 +121,7 @@
 		from job_cntl_parms_both_&file._&inyear. a
 		     inner join
 			 (select da_run_id, incldd_state_cd as submtg_state_cd 
-              from &DA_SCHEMA..efts_fil_meta where fil_4th_node_txt=%nrbquote('&node.') and incldd_state_cd != 'Missing' ) b
+              from &DA_SCHEMA..efts_fil_meta where fil_4th_node_txt=%nrbquote('&node.') &alt_node_cond. and incldd_state_cd != 'Missing' ) b
 
 		on a.da_run_id = b.da_run_id
 
@@ -139,6 +147,7 @@
 			DA_RUN_ID as SRC_DA_RUN_ID
 
 		from max_run_id_&file._&inyear.
+
 	) by tmsis_passthrough; 
 
 
@@ -149,18 +158,29 @@
 
 %macro create_pyears;
 
-	%let pyears=;
+	%let pyears = ;
 
-	%do PY=2014 %to %eval(&YEAR.-1);
+	%if &year = 2015 %then %do; %let pyears = 2014; %end; 
 
-		%let pyears=&PY. &pyears.;
+	%else %do;
+
+		%do PY=%eval(&year. - 2) %to %eval(&year. - 1);
+
+			%let pyears=&PY. &pyears.;
+
+		%end;
 
 	%end;
 
 %mend create_pyears;
 
 /* Macro any_pyear to union all max run ID tables for all prior years, and if rec count is > 0, set
-   get prior=1 (will get prior year records) */
+   get prior=1 (will get prior year records)
+
+   Note: For prior years, we now look to the DE and address file as of 2021. However, only need to check
+   for presence of prior years from the DE.
+
+*/
 
 %macro any_pyear;
 
@@ -174,7 +194,7 @@
 			 from (%do p=1 %to %sysfunc(countw(&pyears.));
 	 	             	%let pyear=%scan(&pyears.,&p.);
 						%if &P. > 1 %then %do; union all %end; 
-                         select * from max_run_id_bsf_&pyear. 
+                         select * from max_run_id_de_&pyear. 
 
 				  %end; )
 
@@ -184,6 +204,7 @@
 	%end;
 
 	%else %let getprior=0;
+	%put getprior = &getprior.;
 
 %mend any_pyear;
 
@@ -289,6 +310,117 @@
 
 %mend create_temp_table;
 
+/* Macro create_hist_demo create the historical tables for base table. For each year of historical data, the macro pulls columns used in the base_demo 
+   table. In an outer query, it then pulls the address information from the address and contact details table. These tables are later joined to the base_demo table.
+
+   Macro parms:
+   	tblname = table name
+   	inyear  = the prior year of data to extract 
+   */
+
+%macro create_hist_demo(tblname, inyear=);
+
+	execute(
+		create temp table &tblname._&inyear.
+		distkey(msis_ident_num)
+		sortkey(submtg_state_cd,msis_ident_num) as
+		select 
+			c.*
+			,d.ELGBL_LINE_1_ADR
+		
+		 from (
+				select  b.submtg_state_cd
+				        ,b.msis_ident_num
+					    ,b.de_fil_dt
+					    ,b.da_run_id
+					    ,b.de_link_key
+
+						,ssn_num
+						,birth_dt
+						,death_dt
+						,dcsd_flag
+						,age_num
+						,age_grp_flag
+						,gndr_cd
+						,mrtl_stus_cd
+						,incm_cd
+						,vet_ind
+						,ctznshp_ind
+						,imgrtn_stus_5_yr_bar_end_dt
+						,othr_lang_home_cd
+						,prmry_lang_flag
+						,prmry_lang_englsh_prfcncy_cd
+						,hsehld_size_cd
+
+						,crtfd_amrcn_indn_alskn_ntv_ind
+						,ethncty_cd
+						,race_ethncty_flag
+						,race_ethncty_exp_flag
+
+						,elgbl_zip_cd
+						,elgbl_cnty_cd
+						,elgbl_state_cd
+
+						,msis_case_num
+						,mdcr_bene_id
+						,mdcr_hicn_num
+					   			          
+				from  max_run_id_de_&inyear. a
+				inner join
+				&DA_SCHEMA..taf_ann_de_base b
+
+				on a.submtg_state_cd = b.submtg_state_cd and
+				   a.da_run_id = b.da_run_id  
+						
+				where b.misg_elgblty_data_ind = 0
+
+				order by submtg_state_cd,
+				         msis_ident_num       
+			 ) as c
+
+			left join &DA_SCHEMA..taf_ann_de_cntct_dtls as d 
+
+			on  c.de_link_key = d.de_link_key
+
+	) by tmsis_passthrough;
+
+
+%mend create_hist_demo;
+
+
+
+/* Macro create_hist_adr create the historical tables for address contact details table. For each year of historical data, the macro pulls columns used in the address contact details
+   table.
+
+   Macro parms:
+   	tblname = table name
+   	inyear  = the prior year of data to extract 
+   */
+
+%macro create_hist_adr(tblname, inyear=);
+
+	execute(
+		create temp table &tblname._&inyear.
+		distkey(msis_ident_num)
+		sortkey(submtg_state_cd,msis_ident_num) as
+			select 
+
+				b.*
+				             
+			from  max_run_id_de_&inyear. a
+			inner join
+			&DA_SCHEMA..taf_ann_de_cntct_dtls b
+
+			on a.submtg_state_cd = b.submtg_state_cd and
+			   a.da_run_id = b.da_run_id
+
+			order by submtg_state_cd,
+			msis_ident_num       
+
+	) by tmsis_passthrough;
+
+%mend create_hist_adr;
+
 /* Macro create_segment, which will be called for each of the segments to run the respective
    create macro, which includes output to the permanent table. This macro will then get the count
    of records in that table, and output to the metadata table. (Note macro CREATE_META_INFO is in
@@ -339,7 +471,6 @@
      incol=input monthly column
      outcol=name of column to be output, where default is the same name of the incol 
      prior=indicator to compare current year against prior years (for demographics) to take prior if current year is missing, where default=0 */
-
 %macro last_best(incol, outcol=, prior=0);
 
 	%if &outcol.=  %then %let outcol = &incol.;
@@ -362,7 +493,6 @@
 	%end;
 
 	as &outcol. 
-
 
 %mend last_best;
 
@@ -662,13 +792,51 @@
    
 %mend nonmiss_month;
 
+
+/*Macro age_calculcate looks at the value of birth date which is already considered acrosss the historical period 
+and calculcates */
+
+%macro age_calculate();	
+
+		case
+			%do m = 1 %to 12;
+				when BSF_RECORD = %tslit(%sysfunc(putn(&m.,z2))) then last_day(%nrbquote('&year.-%sysfunc(putn(&m.,z2))-01'))  
+			%end;
+		end as BSF_LAST_DT,
+
+		case when AGE_NUM_TEMP is not null then AGE_NUM_TEMP 
+			  when BIRTH_DT is not null then
+					case when DEATH_DT is not null then floor(datediff(days, BIRTH_DT, DEATH_DT) /365.25)
+				         when BSF_RECORD is not null then floor(datediff(days, BIRTH_DT, BSF_LAST_DT) /365.25)
+					end
+			else null end as AGE_NUM_RAW,
+
+		case when AGE_NUM_RAW < -1 then null 
+			 when AGE_NUM_RAW > 125 then 125 
+		else AGE_NUM_RAW end as AGE_NUM,
+
+		case when AGE_NUM between -1 and 0 then 1 
+				when AGE_NUM between 1 and 5 then 2
+				when AGE_NUM between 6 and 14 then 3
+				when AGE_NUM between 15 and 18 then 4
+				when AGE_NUM between 19 and 20 then 5
+				when AGE_NUM between 21 and 44 then 6
+				when AGE_NUM between 45 and 64 then 7
+				when AGE_NUM between 65 and 74 then 8
+				when AGE_NUM between 75 and 84 then 9
+				when AGE_NUM between 85 and 125 then 10
+		 else null
+		 end as AGE_GRP_FLAG,
+
+%mend;
+
 /* Macro address_flag looks at the values for HOME_month and MAIL_month and assigns a 1
    if MAIL_month ne 00, otherwise 0 if HOME_month ne 00, otherwise null */
    
 %macro address_flag;
 	
-	,case when ELGBL_LINE_1_ADR_MAIL_MN != '00' and ELGBL_LINE_1_ADR_HOME_MN = '00' then 1
-	     when ELGBL_LINE_1_ADR_HOME_MN != '00' then 0
+	,case when ELGBL_LINE_1_ADR_MAIL_MN != '00' and ELGBL_LINE_1_ADR_HOME_MN = '00' then '1'
+	     when ELGBL_LINE_1_ADR_HOME_MN != '00' then '0'
 	else null
 	end as ELGBL_ADR_MAIL_FLAG
 	     
@@ -794,14 +962,11 @@
 	%end;
 
 %mend mc_waiv_slots;
-
 /* Macro run_mc_slots to run the above mc_waiv_slots macro for all the MC types.
    Macro parms:
     smonth=the month to begin looping over, where default=1
     emonth=the month to end looping over, where default=12 */
-
 %macro run_mc_slots(smonth,emonth);
-
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('01'), CMPRHNSV_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('02'), TRDTNL_PCCM_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
 	%mc_waiv_slots(MC_PLAN_TYPE_CD, %nrstr('03'), ENHNCD_PCCM_MC_PLAN,smonth=&smonth.,emonth=&emonth.)
@@ -873,7 +1038,6 @@
 			    		(nullif(nullif(trim(m&m..MC_PLAN_TYPE_CD&s.),''),'00') is not null or 
 
 						/* OR non-0, 8, 9 only or non-null ID */
-
 						(nullif(trim(m&m..MC_PLAN_ID&s.),'') is not null and 
                         trim(m&m..MC_PLAN_ID&s.) not in ('0','00','000','0000','00000','000000','0000000',
 						                                 '00000000','000000000','0000000000','00000000000','000000000000',

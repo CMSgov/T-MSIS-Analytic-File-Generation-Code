@@ -414,7 +414,8 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
                                       21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45
                                       46 47 48 49 50 51 52 53 54 55 56 59 60 61 62 63 64 65 66 67 68 69 70 71 72
                                       73 74 75 76))
-,%set_to_null(DUAL_ELGBL_CD,%str(00 01 02 03 04 05 06 08 09 10 0 1 2 3 4 5 6 8 9))         
+,%set_to_null(DUAL_ELGBL_CD,%str(00 01 02 03 04 05 06 08 09 10 0 1 2 3 4 5 6 8 9))  
+,%set_to_null(ELGBLTY_CHG_RSN_CD,%str(01 02 03 04 05 06 07 08 09 1 2 3 4 5 6 7 8 9 11 12 13 14 15 16 17 18 19 20 21 22))
 ,%end;
  
  &tbl..MSIS_CASE_NUM 
@@ -436,6 +437,8 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 %if %eval(&final>=1)=1  %then %do;
 ,ELGBLTY_GRP_CODE as ELGBLTY_GRP_CD
 ,DUAL_ELGBL_CODE as DUAL_ELGBL_CD
+,lpad(trim(ELGBLTY_CHG_RSN_CD),2,'0') as ELGBLTY_CHG_RSN_CD
+
 %end;
 
 %mend ELG00005;
@@ -991,6 +994,7 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 ,upper(nullif(trim(ELGBL_ID_MSIS_XWALK),'')) as ELGBL_ID_MSIS_XWALK
 ,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_ENT_ID),'')) as ELGBL_ID_MSIS_XWALK_ENT_ID
 ,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_RSN_CHG),'')) as ELGBL_ID_MSIS_XWALK_RSN_CHG
+,upper(nullif(trim(ELGBLTY_CHG_RSN_CD),'')) as ELGBLTY_CHG_RSN_CD
 %mend FINAL_FORMAT;
   %macro drop_table_multi(dsn_list);
     %let tbl_ct = %sysfunc(countw(&dsn_list));
@@ -998,7 +1002,6 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 	%do I=1 %to &tbl_ct;
 
       %let tbl = %scan(&dsn_list,&I);
-
 	  execute 
 	  (
         drop table if exists &tbl 
@@ -1398,6 +1401,7 @@ DA_RUN_ID
 ,ELGBL_ID_MSIS_XWALK
 ,ELGBL_ID_MSIS_XWALK_ENT_ID 
 ,ELGBL_ID_MSIS_XWALK_RSN_CHG
+,ELGBLTY_CHG_RSN_CD
 %mend BSF_INSERT_ORDER;
 
 %MACRO BUILD_BSF();

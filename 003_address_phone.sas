@@ -69,7 +69,7 @@
     %if &getprior.=1 %then %do;
 		%do p=1 %to %sysfunc(countw(&pyears.));
 	 		%let pyear=%scan(&pyears.,&p.);
-			%address_phone(&pyear.)
+			%create_hist_adr(address_phone, inyear = &pyear.)
 		%end; 
 
 		/* Join current and prior year(s) and first, identify year pulled for latest non-null value of ELGBL_LINE_1_ADR. 

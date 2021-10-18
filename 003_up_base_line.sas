@@ -7,10 +7,6 @@
 /*Mod: 
 /*Notes: 
 /**********************************************************************************************/
-/* Copyright (C) Mathematica Policy Research, Inc.                                            */
-/* This code cannot be copied, distributed or used without the express written permission     */
-/* of Mathematica Policy Research, Inc.                                                       */ 
-/**********************************************************************************************/
 
 %macro base_line_byfile(file=);
 
@@ -103,7 +99,6 @@
 							 condcol4=tos_cd, cond4=%str( = '122'),
 							 outcol=&ind1._&ind2._ANY_MC_PHP)
 
-
 					 %sum_paid(condcol1=&ind1.,
 					           condcol2=&ind2.,
 							   condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
@@ -132,9 +127,52 @@
 							   paidcol=mdcd_pd_amt,
 							   outcol=&ind1._&ind2._MC_PHP_PD)
 
+
+					/* Create indicators for any line with TOS = 138, 139, 140, 141, 142, 143  with TOC = 2/B  - will then sum at header-level */
+   
+				  	%any_rec(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+							 condcol4=tos_cd, cond4=%str( = '138'),				         
+							 outcol=&ind1._&ind2._HH_CLM)
+
+					%any_rec(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+					         condcol4=tos_cd, cond4=%str( in ('139','140','141','142')),
+							 outcol=&ind1._&ind2._MDCR_CLM)
+
+					%any_rec(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+					         condcol4=tos_cd, cond4=%str( = '143'),
+							 outcol=&ind1._&ind2._OTHR_CLM)
+
+					%sum_paid(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+							 condcol4=tos_cd, cond4=%str( = '138'),	
+							 paidcol=mdcd_pd_amt, 
+							 outcol=&ind1._&ind2._HH_PD)
+
+					%sum_paid(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+					         condcol4=tos_cd, cond4=%str( in ('139','140','141','142')),
+							 paidcol=mdcd_pd_amt,
+							 outcol=&ind1._&ind2._MDCR_PD)
+
+					%sum_paid(condcol1=&ind1.,
+					         condcol2=&ind2.,
+							 condcol3=clm_type_cd, cond3=%str( = %nrbquote('&capval.')),
+					         condcol4=tos_cd, cond4=%str( = '143'),
+							 paidcol=mdcd_pd_amt,
+							 outcol=&ind1._&ind2._OTHR_PD)
+
 				  %end;
 			   %end;
 
+			  
 
 		from &file.l_&year.
 		group by submtg_state_cd
@@ -142,6 +180,5 @@
 				 ,&file._link_key
 
 	) by tmsis_passthrough;
-
 
 %mend base_line_byfile;

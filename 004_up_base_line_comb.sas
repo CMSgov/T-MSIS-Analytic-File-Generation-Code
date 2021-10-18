@@ -7,10 +7,6 @@
 /*Mod: 
 /*Notes: 
 /**********************************************************************************************/
-/* Copyright (C) Mathematica Policy Research, Inc.                                            */
-/* This code cannot be copied, distributed or used without the express written permission     */
-/* of Mathematica Policy Research, Inc.                                                       */ 
-/**********************************************************************************************/
 
 %macro base_line_comb;
 
@@ -56,6 +52,15 @@
 				 %sumrecs(incol=&ind1._&ind2._MC_PVT_INS_PD)
 				 %sumrecs(incol=&ind1._&ind2._MC_PHP_PD)
 
+
+				 %sumrecs(incol=&ind1._&ind2._MDCR_CLM)
+				 %sumrecs(incol=&ind1._&ind2._MDCR_PD)
+				 %sumrecs(incol=&ind1._&ind2._OTHR_CLM)
+				 %sumrecs(incol=&ind1._&ind2._OTHR_PD)
+				 %sumrecs(incol=&ind1._&ind2._HH_CLM)
+				 %sumrecs(incol=&ind1._&ind2._HH_PD)
+
+
 			  %end;
 			%end;
 
@@ -97,6 +102,5 @@
 	** Drop tables no longer needed;
 
 	%drop_tables(ipl_hdr_lvl_&year. ltl_hdr_lvl_&year. otl_hdr_lvl_&year. rxl_hdr_lvl_&year.);
-
 
 %mend base_line_comb;

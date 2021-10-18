@@ -25,6 +25,7 @@
 ** 02/19/2020  | program updated (H. Cohen) CCB changes
 ** 06/09/2020  | program updated (H. Cohen) CCB changes
 ** 12/16/2020  | program updated (H. Cohen) CCB changes
+** 07/23/2021  | program updated (H. Cohen) CCB changes
 ** ==========================================================================;
 
 %let taf = mcp;
@@ -496,6 +497,14 @@ proc sql;
              case when OPRTG_AUTHRTY_IND='13' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1915AI_CONC_IND,
              case when OPRTG_AUTHRTY_IND='14' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1932A_1915I_IND,
              case when OPRTG_AUTHRTY_IND='15' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1945_HH_IND,
+			 case when OPRTG_AUTHRTY_IND='16' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1915AJ_CONC_IND,
+             case when OPRTG_AUTHRTY_IND='17' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1932A_1915J_IND,
+             case when OPRTG_AUTHRTY_IND='18' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1915BJ_CONC_IND,
+             case when OPRTG_AUTHRTY_IND='19' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1115_1915J_IND,
+             case when OPRTG_AUTHRTY_IND='20' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1915AK_CONC_IND,
+             case when OPRTG_AUTHRTY_IND='21' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1932A_1915K_IND,
+             case when OPRTG_AUTHRTY_IND='22' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1915BK_CONC_IND,
+             case when OPRTG_AUTHRTY_IND='23' then 1 when OPRTG_AUTHRTY_IND is null then null else 0 end :: smallint as OPRTG_AUTHRTY_1115_1915K_IND,
              OPRTG_AUTHRTY_IND as OPRTG_AUTHRTY,
              waiver_id as WVR_ID,
              /* grouping code */
@@ -526,7 +535,16 @@ proc sql;
              max(OPRTG_AUTHRTY_1915BI_CONC_IND) as OPRTG_AUTHRTY_1915BI_CONC_IND,
              max(OPRTG_AUTHRTY_1915AI_CONC_IND) as OPRTG_AUTHRTY_1915AI_CONC_IND,
              max(OPRTG_AUTHRTY_1932A_1915I_IND) as OPRTG_AUTHRTY_1932A_1915I_IND,
-             max(OPRTG_AUTHRTY_1945_HH_IND) as OPRTG_AUTHRTY_1945_HH_IND
+             max(OPRTG_AUTHRTY_1945_HH_IND) as OPRTG_AUTHRTY_1945_HH_IND,
+             max(OPRTG_AUTHRTY_1915AJ_CONC_IND) as OPRTG_AUTHRTY_1915AJ_CONC_IND,
+             max(OPRTG_AUTHRTY_1932A_1915J_IND) as OPRTG_AUTHRTY_1932A_1915J_IND,
+             max(OPRTG_AUTHRTY_1915BJ_CONC_IND) as OPRTG_AUTHRTY_1915BJ_CONC_IND,
+             max(OPRTG_AUTHRTY_1115_1915J_IND) as OPRTG_AUTHRTY_1115_1915J_IND,
+             max(OPRTG_AUTHRTY_1915AK_CONC_IND) as OPRTG_AUTHRTY_1915AK_CONC_IND,
+             max(OPRTG_AUTHRTY_1932A_1915K_IND) as OPRTG_AUTHRTY_1932A_1915K_IND,
+             max(OPRTG_AUTHRTY_1915BK_CONC_IND) as OPRTG_AUTHRTY_1915BK_CONC_IND,
+             max(OPRTG_AUTHRTY_1115_1915K_IND) as OPRTG_AUTHRTY_1115_1915K_IND
+
              %map_arrayvars (varnm=WVR_ID, N=&opamax, fldtyp=C)
              %map_arrayvars (varnm=OPRTG_AUTHRTY, N=&opamax, fldtyp=C)
       from #MC05_Operating_Authority2
@@ -760,7 +778,6 @@ proc sql;
   ) by tmsis_passthrough;
  
   %DROP_temp_tables(#MC07_Accreditation_URAC);
-
   execute( 
     %recode_lookup (intbl=#MC07_Accreditation_AAHC,
                     srtvars=srtlist,
@@ -786,7 +803,18 @@ proc sql;
   ) by tmsis_passthrough;
  
   %DROP_temp_tables(#MC07_Accreditation_NONE);
-
+  
+  execute( 
+    %recode_lookup (intbl=#MC07_Accreditation_OTHR,
+                    srtvars=srtlist,
+                    fmttbl=mc_formats_sm,
+                    fmtnm='ACRJCAHO', 
+                    srcvar=ACRDTN_ORG,
+                    newvar=ACRDTN_JCAHO, 
+                    outtbl=#MC07_Accreditation_JCAHO,
+                    fldtyp=N);
+  ) by tmsis_passthrough;
+ 
   execute (
     create table #MC07_Accreditation_Mapped
                  diststyle key distkey(state_plan_id_num) as
@@ -795,11 +823,12 @@ proc sql;
              max(ACRDTN_URAC) as ACRDTN_URAC,
              max(ACRDTN_AAHC) as ACRDTN_AAHC,
              max(ACRDTN_NONE) as ACRDTN_NONE,
-             max(ACRDTN_OTHR) as ACRDTN_OTHR
+             max(ACRDTN_OTHR) as ACRDTN_OTHR,
+			 max(ACRDTN_JCAHO) as ACRDTN_JCAHO
              %map_arrayvars (varnm=ACRDTN_ORG, N=&acdmax, fldtyp=C)
              %map_arrayvars (varnm=ACRDTN_ORG_ACHVMT_DT, N=&acdmax, fldtyp=D)
 			 %map_arrayvars (varnm=ACRDTN_ORG_END_DT, N=&acdmax, fldtyp=D)
-      from #MC07_Accreditation_OTHR
+      from #MC07_Accreditation_JCAHO
       group by &srtlist;
   ) by tmsis_passthrough;
 
@@ -810,6 +839,7 @@ proc sql;
     drop table #MC07_Accreditation;
     drop table #MC07_Accreditation2;
     drop table #MC07_Accreditation_OTHR;
+    drop table #MC07_Accreditation_JCAHO;
   ) by tmsis_passthrough;
  
   ** complete base/main table by adding operating authroity, enrollment, and accreditation information ;
@@ -906,7 +936,16 @@ proc sql;
                 A.acrdtn_org_achvmt_dt_03,
                 A.acrdtn_org_end_dt_01,
                 A.acrdtn_org_end_dt_02,
-                A.acrdtn_org_end_dt_03
+                A.acrdtn_org_end_dt_03,
+				O.OPRTG_AUTHRTY_1915AJ_conc_ind,
+				O.OPRTG_AUTHRTY_1932A_1915J_ind,
+				O.OPRTG_AUTHRTY_1915BJ_conc_ind,
+				O.OPRTG_AUTHRTY_1115_1915J_ind,
+				O.OPRTG_AUTHRTY_1915AK_conc_ind,
+				O.OPRTG_AUTHRTY_1932A_1915K_ind,
+				O.OPRTG_AUTHRTY_1915BK_conc_ind,
+				O.OPRTG_AUTHRTY_1115_1915K_ind,
+				A.acrdtn_jcaho
          from #MC02_Main_CNST M 
            left join #MC05_Operating_Authority_Mapped O
              on %write_equalkeys(keyvars=srtlist, t1=M, t2=O)
@@ -922,13 +961,120 @@ proc sql;
 %Get_Audt_counts(&DA_SCHEMA.,&DA_RUN_ID., 101_mc_build.sas, base_MCP);
 
 
-  * insert contents of each remaining temp table into final TAF files;
+  * insert contents of base table into TAF_MCP;
+  
+	%macro basecols;
+                 DA_RUN_ID,
+                 MCP_LINK_KEY,
+                 MCP_FIL_DT,
+                 MCP_VRSN,
+                 TMSIS_RUN_ID,
+                 SUBMTG_STATE_CD,
+                 MC_PLAN_ID,
+                 MC_CNTRCT_EFCTV_DT,
+                 MC_CNTRCT_END_DT,
+                 REG_FLAG,
+                 MC_NAME,
+                 MC_PGM_CD,
+                 MC_PLAN_TYPE_CD,
+                 REIMBRSMT_ARNGMT_CD,
+                 MC_PRFT_STUS_CD,
+                 CBSA_CD,
+                 BUSNS_PCT,
+                 MC_SAREA_CD,
+                 MC_PLAN_TYPE_CAT,
+                 REIMBRSMT_ARNGMT_CAT,
+                 SAREA_STATEWIDE_IND,
+                 OPRTG_AUTHRTY_1115_DEMO_IND,
+                 OPRTG_AUTHRTY_1915B_IND,
+                 OPRTG_AUTHRTY_1932A_IND,
+                 OPRTG_AUTHRTY_1915A_IND,
+                 OPRTG_AUTHRTY_1915BC_CONC_IND,
+                 OPRTG_AUTHRTY_1915AC_CONC_IND,
+                 OPRTG_AUTHRTY_1932A_1915C_IND,
+                 OPRTG_AUTHRTY_PACE_IND,
+                 OPRTG_AUTHRTY_1905T_IND,
+                 OPRTG_AUTHRTY_1937_IND,
+                 OPRTG_AUTHRTY_1902A70_IND,
+                 OPRTG_AUTHRTY_1915BI_CONC_IND,
+                 OPRTG_AUTHRTY_1915AI_CONC_IND,
+                 OPRTG_AUTHRTY_1932A_1915I_IND,
+                 OPRTG_AUTHRTY_1945_HH_IND,
+				 WVR_ID_01,
+				 WVR_ID_02,
+				 WVR_ID_03,
+				 WVR_ID_04,
+				 WVR_ID_05,
+				 WVR_ID_06,
+				 WVR_ID_07,
+				 WVR_ID_08,
+				 WVR_ID_09,
+				 WVR_ID_10,
+				 WVR_ID_11,
+				 WVR_ID_12,
+				 WVR_ID_13,
+				 WVR_ID_14,
+				 WVR_ID_15,
+				 OPRTG_AUTHRTY_01,
+				 OPRTG_AUTHRTY_02,
+				 OPRTG_AUTHRTY_03,
+				 OPRTG_AUTHRTY_04,
+				 OPRTG_AUTHRTY_05,
+				 OPRTG_AUTHRTY_06,
+				 OPRTG_AUTHRTY_07,
+				 OPRTG_AUTHRTY_08,
+				 OPRTG_AUTHRTY_09,
+				 OPRTG_AUTHRTY_10,
+				 OPRTG_AUTHRTY_11,
+				 OPRTG_AUTHRTY_12,
+				 OPRTG_AUTHRTY_13,
+				 OPRTG_AUTHRTY_14,
+				 OPRTG_AUTHRTY_15,
+                 POP_MDCD_MAND_COV_ADLT_IND,
+                 POP_MDCD_MAND_COV_ABD_IND,
+                 POP_MDCD_OPTN_COV_ADLT_IND,
+                 POP_MDCD_OPTN_COV_ABD_IND,
+                 POP_MDCD_MDCLY_NDY_ADLT_IND,
+                 POP_MDCD_MDCLY_NDY_ABD_IND,
+                 POP_CHIP_COV_CHLDRN_IND,
+                 POP_CHIP_OPTN_CHLDRN_IND,
+                 POP_CHIP_OPTN_PRGNT_WMN_IND,
+                 POP_1115_EXPNSN_IND,
+                 POP_UNK_IND,
+                 ACRDTN_NCQA,
+                 ACRDTN_URAC,
+                 ACRDTN_AAHC,
+                 ACRDTN_NONE,
+                 ACRDTN_OTHR,
+				 ACRDTN_ORG_01,
+				 ACRDTN_ORG_02,
+				 ACRDTN_ORG_03,
+                 ACRDTN_ORG_ACHVMT_DT_01,
+                 ACRDTN_ORG_ACHVMT_DT_02,
+                 ACRDTN_ORG_ACHVMT_DT_03,
+                 ACRDTN_ORG_END_DT_01,
+                 ACRDTN_ORG_END_DT_02,
+                 ACRDTN_ORG_END_DT_03,
+				 OPRTG_AUTHRTY_1915AJ_CONC_IND,
+				 OPRTG_AUTHRTY_1932A_1915J_IND,
+				 OPRTG_AUTHRTY_1915BJ_CONC_IND,
+				 OPRTG_AUTHRTY_1115_1915J_IND,
+				 OPRTG_AUTHRTY_1915AK_CONC_IND,
+				 OPRTG_AUTHRTY_1932A_1915K_IND,
+				 OPRTG_AUTHRTY_1915BK_CONC_IND,
+				 OPRTG_AUTHRTY_1115_1915K_IND,
+				 ACRDTN_JCAHO
 
-  execute(
-    insert into &DA_SCHEMA..TAF_MCP
-    select *
-	from #MC02_Base 
-  ) by tmsis_passthrough;
+		%mend basecols;
+
+  execute (
+	insert into &DA_SCHEMA..TAF_MCP
+	(%basecols)
+	select %basecols
+	from #MC02_Base
+  ) by tmsis_passthrough; 
+	
+  * insert contents of each remaining temp table into final TAF files;
   
   execute(
     insert into &DA_SCHEMA..TAF_MCL

@@ -58,7 +58,6 @@ minoperator
 
 %INCLUDE "/sasdata/users/&sysuserid/&TMSIS/&sub_env/data_analytics/taf/programs/AWS_Shared_Macros.sas";
 
-
 %let basedir=/sasdata/users/&sysuserid/&TMSIS/&sub_env/data_analytics/taf/ann_de;
 
 /* Include the annual macros program and the program with the macro for each segment */
@@ -132,14 +131,14 @@ PROC SQL;
 QUIT;
 
 %let DA_RUN_ID=&DA_RUN_ID.;
-
-proc printto log="&basedir./logs/de_annual_build_&da_run_id..log" new;
-run;
+%put DA_RUNID = &DA_RUN_ID.;
 
 /* Create YEAR macro parm from REPORTING_PERIOD, and set other needed macro parms */
-
 data _null_;
-	call symput('YEAR',year(input(strip("&REPORTING_PERIOD"),YYMMDD12.)));
+	call symput('YEAR',year(input(compress("&REPORTING_PERIOD"),YYMMDD12.)));
+run;
+
+proc printto log="&basedir./logs/de_annual_build_%left(&year.)_&da_run_id..log" new;
 run;
 
 %let YEAR=&YEAR.;
@@ -151,6 +150,7 @@ run;
 ** Call the create_pyears macro to create the variable PYEARS, which = list of all years from 2014 to current year minus 1;
 
 %create_pyears;
+%put &pyears.;
 
 options nosymbolgen nomlogic nomprint nospool;
 
@@ -177,7 +177,7 @@ proc sql ;
 			%do p=1 %to %sysfunc(countw(&pyears.));
 		 		%let pyear=%scan(&pyears.,&p.);
 
-		 		%max_run_id(file=BSF, tbl=taf_mon_bsf, inyear=&pyear.)
+		 		%max_run_id(file=DE, tbl=taf_ann_de_base, inyear=&pyear.)
 
 			%end;
 

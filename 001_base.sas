@@ -75,6 +75,11 @@
 
 									 %misg_enrlmt_type
 									 
+									 %last_best(incol=AGE_NUM, outcol = AGE_NUM_TEMP)	
+									 %last_best(incol=AGE_GRP_FLAG, outcol = AGE_GRP_FLAG_TEMP)	
+									 %nonmiss_month(incol = msis_ident_num,outcol = BSF_RECORD)
+
+									 %monthly_array(ELGBLTY_CHG_RSN_CD)
 
 		              ),
                       subcols2=%nrbquote(
@@ -106,8 +111,6 @@
 								          %last_best(BIRTH_DT)
 								          %last_best(DEATH_DT)
 								          %last_best(DCSD_FLAG)
-								          %last_best(AGE_NUM)
-								          %last_best(AGE_GRP_FLAG)
 								          %last_best(GNDR_CD)
 								          %last_best(MRTL_STUS_CD)
 								          %last_best(INCM_CD)
@@ -163,71 +166,70 @@
     %if &getprior.=1 %then %do;
 		%do p=1 %to %sysfunc(countw(&pyears.));
 	 		%let pyear=%scan(&pyears.,&p.);
-			%demographics(&pyear.)
+			%create_hist_demo(base_demo, inyear = &pyear.)
 		%end; 
 	
 	   /* Now join the above tables together to use prior years if current year is missing, keeping demographics only.
 		  For address information, identify year pulled for latest non-null value of ELGBL_LINE_1_ADR. 
-		   Use that year to then take value for all cols */
+		   Use that year to then take value for all cols 
+
+			Age_Num needs to be defined before can define Age_Grp_Flg. Only variable that is reliant on last_best processing before assignment.
+		*/
    
 	  execute(
 	  	create temp table base_demo_&year._out
 	  	distkey(msis_ident_num)
 	  	sortkey(submtg_state_cd,msis_ident_num) as
-	  	
-	  	select  c.msis_ident_num 
-	  	       ,c.submtg_state_cd
-	  	       
-	  	       %last_best(SSN_NUM,prior=1)
-			   %last_best(BIRTH_DT,prior=1)
-			   %last_best(DEATH_DT,prior=1)
-			   %last_best(DCSD_FLAG,prior=1)
-			   %last_best(AGE_NUM,prior=1)
-			   %last_best(AGE_GRP_FLAG,prior=1)
-			   %last_best(GNDR_CD,prior=1)
-			   %last_best(MRTL_STUS_CD,prior=1)
-			   %last_best(INCM_CD,prior=1)
-			   %last_best(VET_IND,prior=1)
-			   %last_best(CTZNSHP_IND,prior=1)
-			   %last_best(IMGRTN_STUS_5_YR_BAR_END_DT,prior=1)
-			   %last_best(OTHR_LANG_HOME_CD,prior=1)
-			   %last_best(PRMRY_LANG_FLAG,prior=1)
-			   %last_best(PRMRY_LANG_ENGLSH_PRFCNCY_CD,prior=1)
-			   %last_best(HSEHLD_SIZE_CD,prior=1)
-							                      
-			   %last_best(CRTFD_AMRCN_INDN_ALSKN_NTV_IND,prior=1)
-			   %last_best(ETHNCTY_CD,prior=1)
-			   %last_best(RACE_ETHNCTY_FLAG,prior=1)
-			   %last_best(RACE_ETHNCTY_EXP_FLAG,prior=1)
+	
+		  	select  c.msis_ident_num 
+		  	       ,c.submtg_state_cd
+		  	       
+		  	       %last_best(SSN_NUM,prior=1)
+				   %last_best(BIRTH_DT,prior=1)
+				   %last_best(DEATH_DT,prior=1)
+				   %last_best(DCSD_FLAG,prior=1)
+				   %last_best(GNDR_CD,prior=1)
+				   %last_best(MRTL_STUS_CD,prior=1)
+				   %last_best(INCM_CD,prior=1)
+				   %last_best(VET_IND,prior=1)
+				   %last_best(CTZNSHP_IND,prior=1)
+				   %last_best(IMGRTN_STUS_5_YR_BAR_END_DT,prior=1)
+				   %last_best(OTHR_LANG_HOME_CD,prior=1)
+				   %last_best(PRMRY_LANG_FLAG,prior=1)
+				   %last_best(PRMRY_LANG_ENGLSH_PRFCNCY_CD,prior=1)
+				   %last_best(HSEHLD_SIZE_CD,prior=1)				                      
+				   %last_best(CRTFD_AMRCN_INDN_ALSKN_NTV_IND,prior=1)
+				   %last_best(ETHNCTY_CD,prior=1)
+				   %last_best(RACE_ETHNCTY_FLAG,prior=1)
+				   %last_best(RACE_ETHNCTY_EXP_FLAG,prior=1)
 
-			   ,case when c.ELGBL_LINE_1_ADR is not null then &year.
-				         %do p=1 %to %sysfunc(countw(&pyears.));
-	 		      			  %let pyear=%scan(&pyears.,&p.);
-							  when p&p..ELGBL_LINE_1_ADR is not null then &pyear.
-						 %end;
-						 else null
-						 end as yearpull
+				   ,case when c.ELGBL_LINE_1_ADR is not null then &year.
+					         %do p=1 %to %sysfunc(countw(&pyears.));
+		 		      			  %let pyear=%scan(&pyears.,&p.);
+								  when p&p..ELGBL_LINE_1_ADR is not null then &pyear.
+							 %end;
+							 else null
+							 end as yearpull
 
-				%address_same_year(ELGBL_ZIP_CD)
-				%address_same_year(ELGBL_CNTY_CD)
-				%address_same_year(ELGBL_STATE_CD)
-							                      
-			   %last_best(MSIS_CASE_NUM,prior=1)
-			   %last_best(MDCR_BENE_ID,prior=1)
-			   %last_best(MDCR_HICN_NUM,prior=1)
-	  	       
-	  	       
-	  	 from base_demo_&year. c
-		      %do p=1 %to %sysfunc(countw(&pyears.));
-	 		      %let pyear=%scan(&pyears.,&p.);
+					%address_same_year(ELGBL_ZIP_CD)
+					%address_same_year(ELGBL_CNTY_CD)
+					%address_same_year(ELGBL_STATE_CD)
+								                      
+				   %last_best(MSIS_CASE_NUM,prior=1)
+				   %last_best(MDCR_BENE_ID,prior=1)
+				   %last_best(MDCR_HICN_NUM,prior=1)
+		  	       
+		  	       
+		  	 from base_demo_&year. c
+			      %do p=1 %to %sysfunc(countw(&pyears.));
+		 		      %let pyear=%scan(&pyears.,&p.);
 
-		  	      left join
-		  	      base_demo_&pyear. p&p.
-		  	      
-			  	 on c.submtg_state_cd = p&p..submtg_state_cd and
-			  	    c.msis_ident_num = p&p..msis_ident_num  
-			  %end;	
-	  	
+			  	      left join
+			  	      base_demo_&pyear. p&p.
+			  	      
+				  	 on c.submtg_state_cd = p&p..submtg_state_cd and
+				  	    c.msis_ident_num = p&p..msis_ident_num  
+				  %end;	
 	  	) by tmsis_passthrough;
 
 	%end; /* end getprior=1 loop */
@@ -256,8 +258,9 @@
 			   b.BIRTH_DT,
 			   b.DEATH_DT,
 			   b.DCSD_FLAG,
-			   b.AGE_NUM,
-			   b.AGE_GRP_FLAG,
+
+			   %age_calculate
+
 			   b.GNDR_CD,
 			   b.MRTL_STUS_CD,
 			   b.INCM_CD,
@@ -341,7 +344,6 @@
 			on a.submtg_state_cd = b.submtg_state_cd and
 			   a.msis_ident_num = b.msis_ident_num
 
-			   /*PG: Verify that by changing this, both base and MC files get teh new plan type cd vars*/
 			inner join 
 			MNGD_CARE_SPLMTL_&year. c
 
@@ -634,6 +636,18 @@
 			,MISG_ENRLMT_TYPE_IND_11
 			,MISG_ENRLMT_TYPE_IND_12
 			,MISG_ELGBLTY_DATA_IND 
+			,ELGBLTY_CHG_RSN_CD_01
+			,ELGBLTY_CHG_RSN_CD_02
+			,ELGBLTY_CHG_RSN_CD_03
+			,ELGBLTY_CHG_RSN_CD_04
+			,ELGBLTY_CHG_RSN_CD_05
+			,ELGBLTY_CHG_RSN_CD_06
+			,ELGBLTY_CHG_RSN_CD_07
+			,ELGBLTY_CHG_RSN_CD_08
+			,ELGBLTY_CHG_RSN_CD_09
+			,ELGBLTY_CHG_RSN_CD_10
+			,ELGBLTY_CHG_RSN_CD_11
+			,ELGBLTY_CHG_RSN_CD_12
 
 		%mend basecols;
 

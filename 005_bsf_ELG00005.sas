@@ -6,12 +6,6 @@
 /*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
 
 %macro create_ELG00005(tab_no, _2x_segment, eff_date, end_date);
 %let ELGBLTY_GRP_CODE = lpad(trim(ELGBLTY_GRP_CD),2,'0') ;
@@ -99,8 +93,9 @@ select * from connection to tmsis_passthrough
                         coalesce(trim(ssi_state_splmt_stus_cd),'x') || coalesce(trim(ssi_stus_cd),'x')  || 
                         coalesce(trim(state_spec_elgblty_fctr_txt),'x')  || coalesce(trim(birth_cncptn_ind),'x')  || 
                         coalesce(trim(mas_cd),'x')  || coalesce(trim(rstrctd_bnfts_cd),'x')  || 
-                        coalesce(trim(tanf_cash_cd),'x')  || coalesce(trim(prmry_elgblty_grp_ind),'x')),
-          where=%str(PRMRY_ELGBLTY_GRP_IND='1'))
+                        coalesce(trim(tanf_cash_cd),'x')  || coalesce(trim(prmry_elgblty_grp_ind),'x')  ||
+						coalesce(trim(elgblty_chg_rsn_cd),'x')),
+		  where=%str(PRMRY_ELGBLTY_GRP_IND='1'))
 
  execute(
 
