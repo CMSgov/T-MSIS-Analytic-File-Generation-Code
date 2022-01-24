@@ -1,5 +1,3 @@
-from pyspark.sql import SparkSession
-
 from taf.BSF.BSF_Metadata import BSF_Metadata
 from taf.BSF.BSF_Runner import BSF_Runner
 
@@ -30,7 +28,7 @@ class ELG():
     #
     # ---------------------------------------------------------------------------------
     def create(self):
-               
+
         self.create_initial_table()
         self.create()
 
@@ -41,8 +39,6 @@ class ELG():
     #
     # ---------------------------------------------------------------------------------
     def create_initial_table(self):
-
-        spark = SparkSession.getActiveSession()
 
         z = f"""
                 create or replace temporary view {self.tab_no} as
@@ -69,7 +65,6 @@ class ELG():
             """
         self.bsf.append(type(self).__name__, z)
 
-
     # ---------------------------------------------------------------------------------
     #
     #
@@ -78,7 +73,8 @@ class ELG():
     # ---------------------------------------------------------------------------------
     def MultiIds(self, sort_key: str = '', where: str = '', suffix: str = '', val: str = ''):
 
-        spark = SparkSession.getActiveSession()
+        if len(where) > 1:
+            where = 'where' + where
 
         z = f"""
                 create or replace temporary view {self.tab_no}_multi_all as
@@ -92,6 +88,8 @@ class ELG():
                     on t1.submtg_state_cd = t2.submtg_state_cd
                     and t1.msis_ident_num = t2.msis_ident_num
                     and t2.recCt > 1
+
+                {where}
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -110,11 +108,12 @@ class ELG():
                         {self.eff_date} desc,
                         {self.end_date} desc,
                         REC_NUM desc,
-                        coalesce(gndr_cd,'xx')||coalesce(cast(birth_dt as char(10)),'xx')||coalesce(cast(death_dt as char(10)),'xx')
+                        {sort_key}
                         ) as KEEP_FLAG
 
                 from {self.tab_no}_multi_all
 
+                {where}
             """
         self.bsf.append(type(self).__name__, z)
 
