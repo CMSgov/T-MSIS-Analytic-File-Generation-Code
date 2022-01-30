@@ -1,4 +1,5 @@
 from taf.BSF import BSF_Runner
+from taf.BSF.BSF_Metadata import BSF_Metadata
 
 from taf.BSF.ELG import ELG
 
@@ -26,7 +27,33 @@ class ELG00021(ELG):
     #
     #
     # ---------------------------------------------------------------------------------
+    def enrlmt(self, max_keep, enrl_type):
+
+        enrlmts = []
+        new_line = '\n\t\t\t'
+        for i in list(range(1, 16 + 1)):
+            if i <= max_keep:
+                enrlmts.append(f"""
+                    , t{i}.{self.eff_date} as {enrl_type}_ENRLMT_EFF_DT_{i}
+                    , t{i}.{self.end_date} as {enrl_type}_ENRLMT_END_DT_{i}
+                """.format())
+            else:
+                enrlmts.append(f"""
+                    , cast(null as date) as {enrl_type}_ENRLMT_EFF_DT_{i}
+                    , cast(null as date) as {enrl_type}_ENRLMT_END_DT_{i}
+                """.format())
+
+        return new_line.join(enrlmts)
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
     def processEnrollment(self, enrl_type, enrl_type_cd):
+
+        new_line = '\n\t\t\t'
 
         #  Step 0: A) Set effective and end dates to death date if death date occurs before.
         #          B) Set null end dates to December 31, 9999
@@ -35,7 +62,7 @@ class ELG00021(ELG):
 
             select *
             from {self.tab_no}_v
-            where enrlmt_type_cd = %nrbquote('{enrl_type_cd}')
+            where enrlmt_type_cd = '{enrl_type_cd}'
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -64,9 +91,9 @@ class ELG00021(ELG):
                 and t1.msis_ident_num = t2.msis_ident_num
                 and t1.dateId <> t2.dateId
             --  Get every dateID where their effective date is greater than or equal to another record's effective date
-                AND their end date is less than or equal to that other record's end date.
-            where date_cmp(t1.{self.eff_date},t2.{self.eff_date}) in(0,1)
-              and date_cmp(t1.{self.end_date},t2.{self.end_date}) in (-1,0)
+            --  AND their end date is less than or equal to that other record's end date.
+            where (t1.{self.eff_date} >= t2.{self.eff_date})
+              and (t1.{self.end_date} <= t2.{self.end_date})
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -104,7 +131,11 @@ class ELG00021(ELG):
                 ,{self.end_date}
                 ,m_eff_dt
                 ,m_end_dt
-                ,decode(sign({self.eff_date}-nvl(m_end_dt+1,{self.eff_date})),1,1,0) as C
+                ,decode(
+                    sign(
+                        datediff({self.eff_date}, nvl(m_end_dt + 1, {self.eff_date}))
+                        ),1,1,0
+                    ) as C
             from
             (select submtg_state_cd
                 ,msis_ident_num
@@ -128,10 +159,12 @@ class ELG00021(ELG):
             select *
                     ,row_number() over (partition by submtg_state_cd ,msis_ident_num
                             order by submtg_state_cd, msis_ident_num, {self.eff_date}, {self.end_date}) as keeper
+
                     -- If data indicates they were deceased well before their original effective dates, set to 0
-                    ,greatest(datediff(day,greatest(&st_dt,{self.eff_date}),
-                            least({self.bsf.RPT_PRD}, {self.end_date}))+1,0) as NUM_DAYS
-                    ,case when date_cmp({self.end_date},{self.bsf.RPT_PRD}) in(0,1) then 1 else 0 end as ELIG_LAST_DAY
+                    ,greatest(datediff(greatest(to_date('{self.bsf.st_dt}'),{self.eff_date}),
+                            least(to_date('{self.bsf.RPT_PRD}'), {self.end_date}))+1,0) as NUM_DAYS
+
+                    ,case when ({self.end_date} >= to_date('{self.bsf.RPT_PRD}')) then 1 else 0 end as ELIG_LAST_DAY
             from  {self.tab_no}_{enrl_type}_step3
             """
         self.bsf.append(type(self).__name__, z)
@@ -143,37 +176,33 @@ class ELG00021(ELG):
 
         #  Step 5: Transpose data from long to wide and create &type specific eligibility columns
         #  Allow for up to 16 columns in array. If there are <16 total spells, use nulls
+
+        max_keep = 16
+
         z = f"""
             create or replace temporary view {enrl_type}_spells as
 
             select m.*
                 ,1 as {enrl_type}_ENR
 
-                %do I=1 %to 16
-                %if %eval(&I <= &max_keep) %then
-                %do
-                    ,t&I..{self.eff_date} as {enrl_type}_ENRLMT_EFF_DT_&I.
-                    ,t&I..{self.end_date} as {enrl_type}_ENRLMT_END_DT_&I.
-                %end %else
-                %do
-                    ,cast(null as date) as {enrl_type}_ENRLMT_EFF_DT_&I.
-                    ,cast(null as date) as {enrl_type}_ENRLMT_END_DT_&I.
-                %end
-                %end
+                { self.enrlmt(max_keep, enrl_type) }
 
             from (select submtg_state_cd
                         ,msis_ident_num
                         ,sum(NUM_DAYS) as DAYS_ELIG_IN_MO_CNT
                         ,max(ELIG_LAST_DAY) as ELIG_LAST_DAY
                 from {self.tab_no}_{enrl_type}_step4 group by submtg_state_cd, msis_ident_num) m
-                %do I=1 %to 16
-                %if %eval(&I <= &max_keep) %then
 
-                    %do
-                    %tbl_joiner(&I)
-                    %end
-                %end
             """
+
+        for i in list(range(1, 16 + 1)):
+            if i <= max_keep:
+                z += f"""
+                        left join (select * from {self.tab_no}_{enrl_type}_step4 where keeper={i}) t{i}
+                              on t1.submtg_state_cd = t{i}.submtg_state_cd
+                             and t1.msis_ident_num  = t{i}.msis_ident_num
+                        """.format()
+
         self.bsf.append(type(self).__name__, z)
 
     # ---------------------------------------------------------------------------------
@@ -183,11 +212,12 @@ class ELG00021(ELG):
     #
     # ---------------------------------------------------------------------------------
     def create(self):
+        from calendar import monthrange
 
         # For bene/state combinations, remove records that overlap across enrollment types.
 
         # First use sort order to identify which records are priority across enrollment types
-        z = f""" create or replace temporary view {self.tab_no}_step1 as
+        z = f"""create or replace temporary view {self.tab_no}_step1 as
                 select *
                 ,row_number() over (partition by submtg_state_cd
                                             ,msis_ident_num
@@ -221,7 +251,11 @@ class ELG00021(ELG):
                 and t1.msis_ident_num = t2.msis_ident_num
                 and coalesce(t1.enrlmt_type_cd,'X') <> coalesce(t2.enrlmt_type_cd,'X')
 
-                where OVR_LAP_RMV = 1 /* Only keep records to be removed in this table
+                where -- OVR_LAP_RMV = 1 -- Only keep records to be removed in this table
+                      (((t1.{self.eff_date} between t2.{self.eff_date} and t2.{self.end_date}) or
+                        (t2.{self.eff_date} between t1.{self.eff_date} and t1.{self.end_date}))
+                    and t1.ORDER_FLAG > t2.ORDER_FLAG)
+
                 """
         self.bsf.append(type(self).__name__, z)
 
@@ -242,28 +276,28 @@ class ELG00021(ELG):
         #  for within enrollment type collapsing.
         z = f"""
             create or replace temporary view {self.tab_no}_v as
-            as
+
             select distinct
                 e21.submtg_state_cd
                 ,e21.msis_ident_num
                 ,e21.tmsis_run_id
                 ,e21.enrlmt_type_cd
-                ,greatest(case when date_cmp(e02.death_date,{self.eff_date}) in(-1,0)
-                        or (e02.death_date is not null and {self.eff_date} is null) then e02.death_date
-                    else {self.eff_date} end, &st_dt::date) as {self.eff_date}
-                ,least(case when date_cmp(e02.death_date,{self.end_date}) in(-1,0)
+                ,greatest(case when (e02.death_date <= to_date('{self.eff_date}'))
+                        or (e02.death_date is not null and to_date('{self.eff_date}') is null) then e02.death_date
+                    else to_date('{self.eff_date}') end, to_date('{self.bsf.st_dt}')) as {self.eff_date}
+                ,least(case when (e02.death_date <= to_date('{self.end_date}'))
                         or (e02.death_date is not null and {self.end_date} is null) then e02.death_date
-                    when {self.end_date} is null then '31DEC9999' else {self.end_date} end, {self.bsf.RPT_PRD}::date) as {self.end_date}
+                    when {self.end_date} is null then to_date('9999-12-31') else {self.end_date} end, to_date('{self.bsf.RPT_PRD}')) as {self.end_date}
             from {self.tab_no}_step3 e21
             left join ELG00002_{self.bsf.BSF_FILE_DATE}_uniq e02
             on e21.submtg_state_cd = e02.submtg_state_cd
             and e21.msis_ident_num = e02.msis_ident_num
             where e21.msis_ident_num is not null
-                /* Filter out records where the death_date is before the start of the month
-                /* This is separate from process enrollment because it includes UNK enrollment types
-                and date_cmp(least(&st_dt,nvl(death_date,{self.end_date},'31DEC9999')),&st_dt) in(0,1)
-                /* Also remove any records where the effective date is after their death date
-                and date_cmp({self.eff_date},least(death_date,'31DEC9999')) <> 1
+                -- Filter out records where the death_date is before the start of the month
+                -- This is separate from process enrollment because it includes UNK enrollment types
+                and ( least(to_date('{self.bsf.st_dt}'), nvl(death_date, nvl(to_date('{self.end_date}'),to_date('9999-12-31'))) ) >= to_date('{self.bsf.st_dt}') )
+                -- Also remove any records where the effective date is after their death date
+                and ( {self.eff_date} <= least(death_date,to_date('9999-12-31')) )
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -278,22 +312,22 @@ class ELG00021(ELG):
                 b.submtg_state_cd
                 ,b.msis_ident_num
                 ,max(b.tmsis_run_id) as tmsis_run_id
+            """
 
-                %do I=1 %to &DAYS_IN_MONTH
-                yr_mn = %substr(&rpt_out,3,7)
-                %if %eval(&I<10 ) %then
-                dt_to_ck = %nrbquote('0&I.&yr_mn')
-                    %else dt_to_ck = %nrbquote('&I.&yr_mn')
+        for d in range(1, monthrange(self.bsf.reporting_period.year, self.bsf.reporting_period.month)[1] + 1):
+            # dt_to_ck = self.bsf.reporting_period.strftime('%d%Y')
+            dt_to_ck = self.bsf.reporting_period.strftime('%y-%m-%d')
+            z += f"""
+                ,max(case when cast(ENRLMT_TYPE_CD as integer) in (1,2)
+                    and ({self.eff_date} <= to_date('{dt_to_ck}'))
+                    and ({self.end_date} >= to_date('{dt_to_ck}')) then 1 else 0 end) as DT_CHK_{d}
+                """.format()
 
-                ,max(case when cast(ENRLMT_TYPE_CD as integer) in(1,2)
-                        and date_cmp({self.eff_date},&dt_to_ck) in(-1,0)
-                        and date_cmp({self.end_date},&dt_to_ck) in(1,0) then 1 else 0 end) as DT_CHK_&I
-                %end
-
+        z += f"""
                 ,sum(case when cast(ENRLMT_TYPE_CD as integer) not in(1,2) or ENRLMT_TYPE_CD is null then 1 else 0 end) as bucket_c
                 from {self.tab_no}_v b
                 group by b.submtg_state_cd, b.msis_ident_num
-        """
+            """
         self.bsf.append(type(self).__name__, z)
 
         # create table states as
@@ -314,79 +348,95 @@ class ELG00021(ELG):
             select b.*,
                     coalesce(m.MDCD_ENR,0) as MDCD_ENR,
                     coalesce(c.CHIP_ENR,0) as CHIP_ENR,
-                %do I=1 %to 16
-                    m.MDCD_ENRLMT_EFF_DT_&I.,
-                    m.MDCD_ENRLMT_END_DT_&I.,
-                %end
+            """
 
-                %do I=1 %to 16
-                    c.CHIP_ENRLMT_EFF_DT_&I.,
-                    c.CHIP_ENRLMT_END_DT_&I.,
-                %end
+        for i in range(1, 16 + 1):
+            z += f"""
+                m.MDCD_ENRLMT_EFF_DT_{i},
+                m.MDCD_ENRLMT_END_DT_{i},
+            """.format()
 
-                    --  Number of days in month equal to last day value of month
-                    &DAYS_IN_MONTH as DAYS_IN_MONTH,
+        for i in range(1, 16 + 1):
+            z += f"""
+                c.CHIP_ENRLMT_EFF_DT_{i},
+                c.CHIP_ENRLMT_END_DT_{i},
+            """.format()
 
-                    --  Sum the number of days in the month that they had enrollment in Medicad or CHIP
-                    DT_CHK_1
-                    %do I=2 %to &DAYS_IN_MONTH
-                        + DT_CHK_&I
-                    %end as DAYS_ELIG_IN_MO_CNT,
+        z += f"""
+                --  Number of days in month equal to last day value of month
+                {monthrange(self.bsf.reporting_period.year, self.bsf.reporting_period.month)[1]} as DAYS_IN_MONTH,
+            """
 
-                    --  Eligible entire month if the number of days in the month is <= sum of days in Medicaid or CHIP
-                    case when DT_CHK_1 = 1
-                    %do I=2 %to &DAYS_IN_MONTH
-                        and DT_CHK_&I = 1
-                    %end then 1 else 0 end as ELIGIBLE_ENTIRE_MONTH_IND,
+        # -- Sum the number of days in the month that they had enrollment in Medicad or CHIP
+        dt_chks = []
+        for d in range(1, monthrange(self.bsf.reporting_period.year, self.bsf.reporting_period.month)[1] + 1):
+            dt_chks.append(f"DT_CHK_{d}".format())
 
-                    --  Eligible Last day if they are eligible on the last day for any of their Medicaid or CHIP records
-                    greatest(m.ELIG_LAST_DAY,c.ELIG_LAST_DAY,0) as ELIGIBLE_LAST_DAY_OF_MONTH_IND,
+        z += ' + '.join(dt_chks)
+        z += '    as DAYS_ELIG_IN_MO_CNT,'
 
-                    case when m.MDCD_ENR = 1 then 1
-                        when c.CHIP_ENR  = 1 then 2
-                        else null end as ENROLLMENT_TYPE_FLAG,
+        # -- Eligible entire month if the number of days in the month is <= sum of days in Medicaid or CHIP
+        dt_chks = []
+        for d in range(1, monthrange(self.bsf.reporting_period.year, self.bsf.reporting_period.month)[1] + 1):
+            dt_chks.append(f"DT_CHK_{d} = 1".format())
 
-                    --  Single Enroll if only one spell across Medicaid and CHIP and no unknown
-                    case when b.bucket_c=1 or
-                            (MDCD_ENR=1 and CHIP_ENR=1) or
-                            (m.MDCD_ENRLMT_EFF_DT_1 is not null and m.MDCD_ENRLMT_EFF_DT_2 is not null) or
-                            (c.CHIP_ENRLMT_EFF_DT_1 is not null and c.CHIP_ENRLMT_EFF_DT_2 is not null)
-                        then 0 else 1 end as SINGLE_ENR_FLAG,
+        z += 'case when '
+        z += ' and '.join(dt_chks)
+        z += '    then 1 else 0 end as ELIGIBLE_ENTIRE_MONTH_IND,'
 
-                    case &state_format end as ST_ABBREV
+        z += f"""
+                --  Eligible Last day if they are eligible on the last day for any of their Medicaid or CHIP records
+                greatest(m.ELIG_LAST_DAY,c.ELIG_LAST_DAY,0) as ELIGIBLE_LAST_DAY_OF_MONTH_IND,
 
-                from {self.tab_no}_buckets b
+                case when m.MDCD_ENR = 1 then 1
+                    when c.CHIP_ENR  = 1 then 2
+                    else null end as ENROLLMENT_TYPE_FLAG,
 
-                left outer join MDCD_SPELLS m
-                on b.submtg_state_cd=m.submtg_state_cd
-                and b.msis_ident_num=m.msis_ident_num
+                --  Single Enroll if only one spell across Medicaid and CHIP and no unknown
+                case when b.bucket_c=1 or
+                        (MDCD_ENR=1 and CHIP_ENR=1) or
+                        (m.MDCD_ENRLMT_EFF_DT_1 is not null and m.MDCD_ENRLMT_EFF_DT_2 is not null) or
+                        (c.CHIP_ENRLMT_EFF_DT_1 is not null and c.CHIP_ENRLMT_EFF_DT_2 is not null)
+                    then 0 else 1 end as SINGLE_ENR_FLAG,
 
-                left outer join CHIP_SPELLS c
-                on b.submtg_state_cd=c.submtg_state_cd
-                and b.msis_ident_num=c.msis_ident_num
-                """
+                case
+
+                    when b.submtg_state_cd='01' then 'AL'
+                    when b.submtg_state_cd='01' then 'AL'
+
+                end as ST_ABBREV
+
+            from {self.tab_no}_buckets b
+
+            left outer join MDCD_SPELLS m
+            on b.submtg_state_cd=m.submtg_state_cd
+            and b.msis_ident_num=m.msis_ident_num
+
+            left outer join CHIP_SPELLS c
+            on b.submtg_state_cd=c.submtg_state_cd
+            and b.msis_ident_num=c.msis_ident_num
+            """
         self.bsf.append(type(self).__name__, z)
 
-        #  Output table with SSN_IND and region column to provide master table for final program
+        # Output table with SSN_IND and region column to provide master table for final program
         # Add ssn_ind from initial max ID pull
         z = f"""
-
             create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
 
-            select
+            select distinct
                 c.*
                 ,s.ssn_ind
-                ,case when ST_ABBREV in('CT','MA','ME','NH','RI','VT') 			    then '01'
-                        when ST_ABBREV in('NJ','NY','PR','VI')						then '02'
-                        when ST_ABBREV in('DE','DC','MD','PA','VA','WV') 			then '03'
-                        when ST_ABBREV in('AL','FL','GA','KY','MS','NC','SC','TN')  then '04'
-                        when ST_ABBREV in('IL','IN','MI','MN','OH','WI')            then '05'
-                        when ST_ABBREV in('AR','LA','NM','OK','TX')				    then '06'
-                        when ST_ABBREV in('IA','KS','MO','NE')						then '07'
-                        when ST_ABBREV in('CO','MT','ND','SD','UT','WY')			then '08'
-                        when ST_ABBREV in('AZ','CA','HI','NV','AS','GU','MP')		then '09'
-                        when ST_ABBREV in('AK','ID','OR','WA')						then '10'
-                        else '11' end as REGION
+                ,case when ST_ABBREV in('CT','MA','ME','NH','RI','VT')           then '01'
+                      when ST_ABBREV in('NJ','NY','PR','VI')                     then '02'
+                      when ST_ABBREV in('DE','DC','MD','PA','VA','WV')           then '03'
+                      when ST_ABBREV in('AL','FL','GA','KY','MS','NC','SC','TN') then '04'
+                      when ST_ABBREV in('IL','IN','MI','MN','OH','WI')           then '05'
+                      when ST_ABBREV in('AR','LA','NM','OK','TX')                then '06'
+                      when ST_ABBREV in('IA','KS','MO','NE')                     then '07'
+                      when ST_ABBREV in('CO','MT','ND','SD','UT','WY')           then '08'
+                      when ST_ABBREV in('AZ','CA','HI','NV','AS','GU','MP')      then '09'
+                      when ST_ABBREV in('AK','ID','OR','WA')                     then '10'
+                      else '11' end as REGION
                 from {self.tab_no}_combined c
 
             left join ssn_ind s

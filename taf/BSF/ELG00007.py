@@ -30,8 +30,6 @@ class ELG00007(ELG):
     # ---------------------------------------------------------------------------------
     def create(self):
 
-        created_vars = ''
-
         #  Create temp table to determine which beneficiaries have multiple records
         z = f"""
             create or replace temporary view {self.tab_no}_recCt as
@@ -69,7 +67,7 @@ class ELG00007(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select count(msis_ident_num) as beneficiaries from {self.tab_no}_uniq )
 
-        self.MultiIds(self, "coalesce(trim(HH_PRVDR_NUM),'xx')")
+        self.MultiIds('', "coalesce(trim(HH_PRVDR_NUM),'xx')")
 
         #  Union together tables for a permanent table
         z = f"""

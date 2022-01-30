@@ -1,4 +1,6 @@
+from re import M
 from taf.BSF import BSF_Runner
+from taf.BSF.BSF_Metadata import BSF_Metadata
 
 
 
@@ -28,13 +30,37 @@ class ELG00012(ELG):
     #
     #
     # ---------------------------------------------------------------------------------
+    def wvr_id(self, max_keep):
+
+        wvr_ids = []
+        new_line = '\n\t\t\t'
+        for i in list(range(1, 10 + 1)):
+            if i <= max_keep:
+                wvr_ids.append(f"""
+                    , t{i}.WVR_ID as WVR_ID{i}
+                    , t{i}.WVR_TYPE_CODE as WVR_TYPE_CD{i}
+                """.format())
+            else:
+                wvr_ids.append(f"""
+                    , cast(null as varchar(20)) as WVR_ID{i}
+                    , cast(null as varchar(2)) as WVR_TYPE_CD{i}
+                """.format())
+
+        return new_line.join(wvr_ids)
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
     def create(self):
 
-        WVR_TYPE_CD = f"""cast(case when length(trim(WVR_TYPE_CD))=1
-                           and WVR_TYPE_CD <> '' then lpad(WVR_TYPE_CD,2,'0') else WVR_TYPE_CD end as char(2))"""
+        WVR_TYPE_CD = """cast(case when length(trim(WVR_TYPE_CD))=1
+                         and WVR_TYPE_CD <> '' then lpad(WVR_TYPE_CD,2,'0') else WVR_TYPE_CD end as char(2))"""
 
         z = f"""
-            create or replace temporary view {self.tab_no}_step1
+            create or replace temporary view {self.tab_no}_step1 as
 
             select distinct
                 submtg_state_cd,
@@ -44,13 +70,12 @@ class ELG00012(ELG):
                 {self.end_date},
                 tmsis_rptg_prd,
                 wvr_id,
-
-                &WVR_TYPE_CD as WVR_TYPE_CODE ,
+                ({WVR_TYPE_CD}) as WVR_TYPE_CODE,
 
                 row_number() over (partition by submtg_state_cd,
                                         msis_ident_num,
                                         wvr_id,
-                                        wvr_type_code
+                                        {WVR_TYPE_CD}
                             order by submtg_state_cd,
                                         msis_ident_num,
                                         TMSIS_RPTG_PRD desc,
@@ -58,7 +83,7 @@ class ELG00012(ELG):
                                         {self.end_date} desc,
                                         REC_NUM desc,
                                         wvr_id,
-                                        wvr_type_code) as waiver_deduper
+                                        {WVR_TYPE_CD}) as waiver_deduper
 
                 from (select * from {self.tab_no}
                     where wvr_id is not null
@@ -81,7 +106,7 @@ class ELG00012(ELG):
                                         {self.end_date} desc,
                                         REC_NUM desc,
                                         wvr_id,
-                                        wvr_type_code) as keeper
+                                        WVR_TYPE_CODE) as keeper
 
                 from {self.tab_no}_step1
                 where waiver_deduper=1
@@ -98,34 +123,20 @@ class ELG00012(ELG):
         #       (select max(keeper) as max_keep from {self.tab_no}_step2))
 
         # %check_max_keep(10)
+        max_keep = 10
 
         z = f"""
             create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
 
             select
-                t1.submtg_state_cd
+                 t1.submtg_state_cd
                 ,t1.msis_ident_num
 
-                %do I=1 %to 10
-                %if %eval(&I <= &max_keep) %then
-                %do
-                    ,t&I..WVR_ID as WVR_ID&I.
-                    ,t&I..WVR_TYPE_CODE as WVR_TYPE_CD&I
-                %end %else
-                %do
-                    ,cast(null as varchar(20)) as WVR_ID&I.
-                    ,cast(null as varchar(2)) as WVR_TYPE_CD&I
-                %end
-                %end
+                { self.wvr_id(max_keep) }
 
                 from (select * from {self.tab_no}_step2 where keeper=1) t1
 
-                %do I=2 %to 10
-                %if %eval(&I <= &max_keep) %then
-                    %do
-                    %dedup_tbl_joiner(&I)
-                    %end
-                %end
+                { BSF_Metadata.dedup_tbl_joiner('ELG00012', range(2, 11), max_keep) }
 
                 """
         self.bsf.append(type(self).__name__, z)

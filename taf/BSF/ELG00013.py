@@ -1,4 +1,5 @@
 from taf.BSF import BSF_Runner
+from taf.BSF.BSF_Metadata import BSF_Metadata
 
 
 
@@ -21,6 +22,30 @@ class ELG00013(ELG):
     # ---------------------------------------------------------------------------------
     def __init__(self, bsf: BSF_Runner):
         ELG.__init__(self, bsf, 'ELG00013', 'TMSIS_LTSS_PRTCPTN_DATA', 'LTSS_ELGBLTY_EFCTV_DT', 'LTSS_ELGBLTY_END_DT')
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
+    def ltss(self, max_keep):
+
+        ltsses = []
+        new_line = '\n\t\t\t'
+        for i in list(range(1, 3 + 1)):
+            if i <= max_keep:
+                ltsses.append(f"""
+                    , t{i}.LTSS_PRVDR_NUM as LTSS_PRVDR_NUM{i}
+                    , t{i}.LTSS_LVL_CARE_CD as LTSS_LVL_CARE_CD{i}
+                """.format())
+            else:
+                ltsses.append(f"""
+                    , cast(null as varchar(20)) as LTSS_PRVDR_NUM{i}
+                    , cast(null as varchar(2)) as LTSS_LVL_CARE_CD{i}
+                """.format())
+
+        return new_line.join(ltsses)
 
     # ---------------------------------------------------------------------------------
     #
@@ -95,6 +120,7 @@ class ELG00013(ELG):
         # select max_keep into :max_keep
         # from (select * from connection to tmsis_passthrough
         #       (select max(keeper) as max_keep from {self.tab_no}_step2))
+        max_keep = 3
 
         z = f"""
             create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
@@ -103,26 +129,12 @@ class ELG00013(ELG):
                 t1.submtg_state_cd
                 ,t1.msis_ident_num
 
-                %do I=1 %to 3
-                %if %eval(&I <= &max_keep) %then
-                %do
-                    ,t&I..LTSS_PRVDR_NUM as LTSS_PRVDR_NUM&I.
-                    ,t&I..LTSS_LVL_CARE_CD as LTSS_LVL_CARE_CD&I
-                %end %else
-                %do
-                    ,cast(null as varchar(30)) as LTSS_PRVDR_NUM&I.
-                    ,cast(null as varchar(1)) as LTSS_LVL_CARE_CD&I.
-                %end
-                %end
+                { self.ltss(max_keep) }
 
                 from (select * from {self.tab_no}_step2 where keeper=1) t1
 
-                %do I=2 %to 3
-                %if %eval(&I <= &max_keep) %then
-                    %do
-                    %dedup_tbl_joiner(&I)
-                    %end
-                %end
+                { BSF_Metadata.dedup_tbl_joiner('ELG00013', range(2, 4), max_keep) }
+
                 """
         self.bsf.append(type(self).__name__, z)
 

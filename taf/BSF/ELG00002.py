@@ -63,8 +63,9 @@ class ELG00002(ELG):
             """
         self.bsf.append(type(self).__name__, z)
 
+        created_vars = "upper(GNDR_CD) as GNDR_CODE"
         sort_key = "coalesce(gndr_cd,'xx')||coalesce(cast(birth_dt as char(10)),'xx')||coalesce(cast(death_dt as char(10)),'xx')"
-        self.MultiIds(self, sort_key)
+        self.MultiIds(created_vars, sort_key)
 
         # Number of beneficiary with unique records in {self.tab_no}
         # select count(msis_ident_num) as beneficiaries from ELG00002_uniq
@@ -96,9 +97,8 @@ class ELG00002(ELG):
                 from {self.tab_no}
             """
         self.bsf.append(type(self).__name__, z)
-        
-        # ELG00002A
 
+        # ELG00002A
 
         # select * from ELG00002_death
         # create temp table {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq

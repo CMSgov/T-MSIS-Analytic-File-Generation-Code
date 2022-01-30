@@ -19,15 +19,15 @@ class BSF_Metadata:
 
         new_line_comma = '\n\t\t\t,'
 
-        columns = BSF_Metadata.columns[segment_id]
+        columns = BSF_Metadata.columns.get(segment_id).copy()
 
         for i, item in enumerate(columns):
             if item in BSF_Metadata.cleanser.keys():
-                columns[i] = BSF_Metadata.cleanser[item](alias)
+                columns[i] = BSF_Metadata.cleanser.copy().get(item)(alias)
             elif item in BSF_Metadata.validator.keys():
                 columns[i] = BSF_Metadata.maskInvalidValues(item, alias)
             else:
-                columns[i] = f"{alias}.{columns[i]}"
+                columns[i] = f"{columns[i]}"
 
         return new_line_comma.join(columns)
 
@@ -63,7 +63,14 @@ class BSF_Metadata:
     @staticmethod
     def tagAlias(segment: str, alias: str):
         new_line_comma = '\n\t\t,'
-        return new_line_comma.join([alias + '.' + c for c in BSF_Metadata.columns[segment]])
+        # return new_line_comma.join([alias + '.' + c for c in BSF_Metadata.columns.get(segment)])
+
+        aliased_cols = [alias + '.' + c for c in BSF_Metadata.final.get(segment)]
+
+        i = ','.join([new_line_comma.join(aliased_cols)])
+        if len(i) > 0:
+            i += ','
+        return i
 
     # ---------------------------------------------------------------------------------
     #
@@ -72,36 +79,36 @@ class BSF_Metadata:
     #
     # ---------------------------------------------------------------------------------
     @staticmethod
-    def unifySelect( bsf: BSF_Runner):
+    def unifySelect(bsf: BSF_Runner):
 
         z = f"""
             create or replace temporary view BSF_STEP1 as
             select
                 t1.*,
 
-                {BSF_Metadata.tagAlias('ELG00002', 't2')},
+                {BSF_Metadata.tagAlias('ELG00002', 't2')}
 
                 t2.AGE,
                 t2.DECEASED_FLG as DECEASED_FLAG,
                 t2.AGE_GROUP_FLG as AGE_GROUP_FLAG,
                 t2.GNDR_CODE,
 
-                {BSF_Metadata.tagAlias('ELG00003', 't3')},
+                {BSF_Metadata.tagAlias('ELG00003', 't3')}
 
                 t3.PRMRY_LANG_CODE,
                 t3.PRMRY_LANG_FLG as PRMRY_LANG_FLAG,
                 t3.PREGNANCY_FLG as PREGNANCY_FLAG,
 
-                {BSF_Metadata.tagAlias('ELG00004', 't4')},
+                {BSF_Metadata.tagAlias('ELG00004', 't4')}
 
-                {BSF_Metadata.tagAlias('ELG00005', 't5')},
+                {BSF_Metadata.tagAlias('ELG00005', 't5')}
 
                 t5.CARE_LVL_STUS_CODE,
                 t5.DUAL_ELIGIBLE_FLG as DUAL_ELIGIBLE_FLAG,
                 t5.ELIGIBILITY_GROUP_CATEGORY_FLG as ELIGIBILITY_GROUP_CATEGORY_FLAG,
                 t5.MASBOE,
 
-                {BSF_Metadata.tagAlias('ELG00006', 't6')},
+                {BSF_Metadata.tagAlias('ELG00006', 't6')}
 
                 case
                 when t6.HH_PROGRAM_PARTICIPANT_FLG = 2 and
@@ -111,7 +118,7 @@ class BSF_Metadata:
                      coalesce(t8.ANY_VALID_HH_CC,0)=1 then 1
                 else 0 end as HH_PROGRAM_PARTICIPANT_FLAG,
 
-                {BSF_Metadata.tagAlias('ELG00007', 't7')},
+                {BSF_Metadata.tagAlias('ELG00007', 't7')}
 
                 t8.MH_HH_CHRONIC_COND_FLG as MH_HH_CHRONIC_COND_FLAG,
                 t8.SA_HH_CHRONIC_COND_FLG as SA_HH_CHRONIC_COND_FLAG,
@@ -130,7 +137,7 @@ class BSF_Metadata:
                 t9.LCKIN_PRVDR_TYPE_CD3,
                 nullif(coalesce(t9.LOCK_IN_FLG,0),2) as LOCK_IN_FLAG,
 
-                {BSF_Metadata.tagAlias('ELG00010', 't7')},
+                {BSF_Metadata.tagAlias('ELG00010', 't7')}
 
                 t11.COMMUNITY_FIRST_CHOICE_SPO_FLG as COMMUNITY_FIRST_CHOICE_SPO_FLAG,
                 t11._1915I_SPO_FLG as _1915I_SPO_FLAG,
@@ -200,11 +207,11 @@ class BSF_Metadata:
                 t14.MC_PLAN_TYPE_CD15,
                 t14.MC_PLAN_TYPE_CD16,
 
-                {BSF_Metadata.tagAlias('ELG00015', 't15')},
+                {BSF_Metadata.tagAlias('ELG00015', 't15')}
 
                 t15.HISPANIC_ETHNICITY_FLG as HISPANIC_ETHNICITY_FLAG,
 
-                {BSF_Metadata.tagAlias('ELG00016', 't16')},
+                {BSF_Metadata.tagAlias('ELG00016', 't16')}
 
                 t16.NATIVE_HI_FLG as NATIVE_HI_FLAG,
                 t16.GUAM_CHAMORRO_FLG as GUAM_CHAMORRO_FLAG,
@@ -282,7 +289,7 @@ class BSF_Metadata:
                 t17.DIFF_ERRANDS_ALONE_DISAB_FLG as DIFF_ERRANDS_ALONE_DISAB_FLAG,
                 t17.OTHER_DISAB_FLG as OTHER_DISAB_FLAG,
 
-                {BSF_Metadata.tagAlias('ELG00018', 't18')},
+                {BSF_Metadata.tagAlias('ELG00018', 't18')}
 
                 t18._1115A_PARTICIPANT_FLG as _1115A_PARTICIPANT_FLAG,
 
@@ -297,7 +304,7 @@ class BSF_Metadata:
                 t19.HCBS_TECH_DEP_MF_NON_HHCC_FLG as HCBS_TECH_DEP_MF_NON_HHCC_FLAG,
                 t19.HCBS_DISAB_OTHER_NON_HHCC_FLG as HCBS_DISAB_OTHER_NON_HHCC_FLAG,
 
-                {BSF_Metadata.tagAlias('TPL00002', 't20')},
+                {BSF_Metadata.tagAlias('TPL00002', 't20')}
 
                 '{bsf.TAF_FILE_DATE}' as BSF_FIL_DT,
 
@@ -307,7 +314,9 @@ class BSF_Metadata:
 
             from
 
-                {BSF_Metadata.joiner(bsf.TAF_FILE_DATE)}
+                ELG00021_{bsf.BSF_FILE_DATE}_uniq t1
+
+                {BSF_Metadata.join_segments(bsf.TAF_FILE_DATE)}
         """
 
         return z
@@ -319,7 +328,6 @@ class BSF_Metadata:
     #
     # ---------------------------------------------------------------------------------
     indices = {
-        't1': 'ELG00021',
         't2': 'ELG00002',
         't3': 'ELG00003',
         't4': 'ELG00004',
@@ -352,8 +360,8 @@ class BSF_Metadata:
         new_line = '\n\t\t\t'
         for t, tbl in BSF_Metadata.indices.items():
             joins.append(f"""left join {tbl}_{BSF_FILE_DATE}_uniq as {t}
-                    on t1.submtg_state_cd = {t}.submtg_state_cd
-                    on t1.msis_ident_num  = {t}.msis_ident_num
+                     on t1.submtg_state_cd = {t}.submtg_state_cd
+                    and t1.msis_ident_num  = {t}.msis_ident_num
                 """.format())
         return new_line.join(joins)
 
@@ -401,7 +409,7 @@ class BSF_Metadata:
             when {alias}.SUBMTG_STATE_CD = '97' then '42'
             when {alias}.SUBMTG_STATE_CD = '93' then '56'
             when {alias}.SUBMTG_STATE_CD = '94' then '30'
-            else {alias}.SUBMTG_STATE_CD end': 'SUBMTG_STATE_CD
+            else {alias}.SUBMTG_STATE_CD end as SUBMTG_STATE_CD
         """
 
     # ---------------------------------------------------------------------------------
@@ -413,7 +421,7 @@ class BSF_Metadata:
     def cleanImmigrationStatusCd(alias):
         return f"""case
             when {alias}.IMGRTN_STUS_CD = '8' then '0'
-            else {alias}.IMGRTN_STUS_CD end': 'IMGRTN_STUS_CD
+            else {alias}.IMGRTN_STUS_CD end as IMGRTN_STUS_CD
         """
 
     # ---------------------------------------------------------------------------------
@@ -433,23 +441,24 @@ class BSF_Metadata:
     #  'W' Serbo-Croatian
     #
     # ---------------------------------------------------------------------------------
-    def encodePrimaryLanguage(alias):
+    @staticmethod
+    def encodePrimaryLanguage():
         return f"""case
-             when trim({alias}.PRMRY_LANG_CODE) in ('CHI')                         then  'C'
-             when trim({alias}.PRMRY_LANG_CODE) in ('GER','GMH','GOH','GSW','NDS') then  'D'
-             when trim({alias}.PRMRY_LANG_CODE) in ('ENG','ENM','ANG')             then  'E'
-             when trim({alias}.PRMRY_LANG_CODE) in ('FRE','FRM','FRO')             then  'F'
-             when trim({alias}.PRMRY_LANG_CODE) in ('GRC','GRE')                   then  'G'
-             when trim({alias}.PRMRY_LANG_CODE) in ('ITA','SCN')                   then  'I'
-             when trim({alias}.PRMRY_LANG_CODE) in ('JPN')                         then  'J'
-             when trim({alias}.PRMRY_LANG_CODE) in ('NOB','NNO','NOR')             then  'N'
-             when trim({alias}.PRMRY_LANG_CODE) in ('POL')                         then  'P'
-             when trim({alias}.PRMRY_LANG_CODE) in ('RUS')                         then  'R'
-             when trim({alias}.PRMRY_LANG_CODE) in ('SPA')                         then  'S'
-             when trim({alias}.PRMRY_LANG_CODE) in ('SWE')                         then  'V'
-             when trim({alias}.PRMRY_LANG_CODE) in ('SRP','HRV')                   then  'W'
-             when trim({alias}.PRMRY_LANG_CODE) in ('UND','','.')
-                  or PRMRY_LANG_CODE is null                                       then  null
+             when trim(PRMRY_LANG_CODE) in ('CHI')                         then  'C'
+             when trim(PRMRY_LANG_CODE) in ('GER','GMH','GOH','GSW','NDS') then  'D'
+             when trim(PRMRY_LANG_CODE) in ('ENG','ENM','ANG')             then  'E'
+             when trim(PRMRY_LANG_CODE) in ('FRE','FRM','FRO')             then  'F'
+             when trim(PRMRY_LANG_CODE) in ('GRC','GRE')                   then  'G'
+             when trim(PRMRY_LANG_CODE) in ('ITA','SCN')                   then  'I'
+             when trim(PRMRY_LANG_CODE) in ('JPN')                         then  'J'
+             when trim(PRMRY_LANG_CODE) in ('NOB','NNO','NOR')             then  'N'
+             when trim(PRMRY_LANG_CODE) in ('POL')                         then  'P'
+             when trim(PRMRY_LANG_CODE) in ('RUS')                         then  'R'
+             when trim(PRMRY_LANG_CODE) in ('SPA')                         then  'S'
+             when trim(PRMRY_LANG_CODE) in ('SWE')                         then  'V'
+             when trim(PRMRY_LANG_CODE) in ('SRP','HRV')                   then  'W'
+             when trim(PRMRY_LANG_CODE) in ('UND','','.')
+                  or PRMRY_LANG_CODE is null                               then  null
              else 'O' end as PRMRY_LANG_FLG
         """
 
@@ -460,18 +469,18 @@ class BSF_Metadata:
     #
     # ---------------------------------------------------------------------------------
     @staticmethod
-    def encodeStateAsRegion(alias):
+    def encodeStateAsRegion():
         return f"""case
-            when {alias}.ST_ABBREV in ('CT','MA','ME','NH','RI','VT') 			 then '01'
-            when {alias}.ST_ABBREV in ('NJ','NY','PR','VI')						 then '02'
-            when {alias}.ST_ABBREV in ('DE','DC','MD','PA','VA','WV') 			 then '03'
-            when {alias}.ST_ABBREV in ('AL','FL','GA','KY','MS','NC','SC','TN')  then '04'
-            when {alias}.ST_ABBREV in ('IL','IN','MI','MN','OH','WI')            then '05'
-            when {alias}.ST_ABBREV in ('AR','LA','NM','OK','TX')				 then '06'
-            when {alias}.ST_ABBREV in ('IA','KS','MO','NE')						 then '07'
-            when {alias}.ST_ABBREV in ('CO','MT','ND','SD','UT','WY')			 then '08'
-            when {alias}.ST_ABBREV in ('AZ','CA','HI','NV','AS','GU','MP')		 then '09'
-            when {alias}.ST_ABBREV in ('AK','ID','OR','WA')						 then '10'
+            when ST_ABBREV in ('CT','MA','ME','NH','RI','VT') 			 then '01'
+            when ST_ABBREV in ('NJ','NY','PR','VI')						 then '02'
+            when ST_ABBREV in ('DE','DC','MD','PA','VA','WV') 			 then '03'
+            when ST_ABBREV in ('AL','FL','GA','KY','MS','NC','SC','TN')  then '04'
+            when ST_ABBREV in ('IL','IN','MI','MN','OH','WI')            then '05'
+            when ST_ABBREV in ('AR','LA','NM','OK','TX')				 then '06'
+            when ST_ABBREV in ('IA','KS','MO','NE')						 then '07'
+            when ST_ABBREV in ('CO','MT','ND','SD','UT','WY')			 then '08'
+            when ST_ABBREV in ('AZ','CA','HI','NV','AS','GU','MP')		 then '09'
+            when ST_ABBREV in ('AK','ID','OR','WA')						 then '10'
             else '11' end as REGION
         """
 
@@ -485,7 +494,7 @@ class BSF_Metadata:
         delim = '\',\''
         return f"""case
             when upper(trim({alias}.{column}))
-                in ('{delim.join(BSF_Metadata.validator[column])}')
+                in ('{delim.join(BSF_Metadata.validator.get(column))}')
                     then upper(trim({alias}.{column}))
                         else null end as {column}
         """
@@ -498,7 +507,7 @@ class BSF_Metadata:
     # ---------------------------------------------------------------------------------
     def rename(column: str):
         if column in BSF_Metadata.renames.keys():
-            return f"{BSF_Metadata.renames[column]}"
+            return f"{BSF_Metadata.renames.get(column)}"
         else:
             return column
 
@@ -724,6 +733,27 @@ class BSF_Metadata:
     #
     #
     # ---------------------------------------------------------------------------------
+    created_vars = {
+
+        'ELG00002': None,
+        'ELG00003': None,
+        'ELG00004': None,
+        'ELG00005': None,
+        'ELG00006': None,
+        'ELG00007': None,
+        'ELG00010': None,
+        'ELG00015': None,
+        'ELG00018': None,
+        'TPL00002': None,
+        'ELG00022': None
+    }
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
     final = {
 
         'ELG00001': [],
@@ -868,13 +898,13 @@ class BSF_Metadata:
         ],
 
         'ELG00003A': [
-            '.TMSIS_RUN_ID',
-            '.TMSIS_ACTV_IND',
-            '.PRGNT_IND ',
-            '.SUBMTG_STATE_CD',
-            '.VAR_DMGRPHC_ELE_EFCTV_DT',
-            '.VAR_DMGRPHC_ELE_END_DT',
-            '.REC_NUM'
+            'TMSIS_RUN_ID',
+            'TMSIS_ACTV_IND',
+            'PRGNT_IND ',
+            'SUBMTG_STATE_CD',
+            'VAR_DMGRPHC_ELE_EFCTV_DT',
+            'VAR_DMGRPHC_ELE_END_DT',
+            'REC_NUM'
         ],
 
         'ELG00004': [
@@ -916,7 +946,8 @@ class BSF_Metadata:
             'RSTRCTD_BNFTS_CD',
             'TANF_CASH_CD',
             'ELGBLTY_DTRMNT_EFCTV_DT',
-            'ELGBLTY_DTRMNT_END_DT'
+            'ELGBLTY_DTRMNT_END_DT',
+            'PRMRY_ELGBLTY_GRP_IND'
         ],
 
         'ELG00006': [
@@ -1025,8 +1056,7 @@ class BSF_Metadata:
             'REC_NUM',
             'ETHNCTY_DCLRTN_EFCTV_DT',
             'ETHNCTY_DCLRTN_END_DT',
-            'ETHNCTY_CD',
-            'CRTFD_AMRCN_INDN_ALSKN_NTV_IND'
+            'ETHNCTY_CD'
         ],
 
         'ELG00016': [
@@ -1037,7 +1067,8 @@ class BSF_Metadata:
             'RACE_CD',
             'RACE_DCLRTN_EFCTV_DT',
             'RACE_DCLRTN_END_DT',
-            'RACE_OTHR_TXT'
+            'RACE_OTHR_TXT',
+            'CRTFD_AMRCN_INDN_ALSKN_NTV_IND'
         ],
 
         'ELG00017': [

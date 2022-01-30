@@ -21,6 +21,10 @@ class ELG00003(ELG):
     def __init__(self, bsf: BSF_Runner):
         ELG.__init__(self, bsf, 'ELG00003', 'TMSIS_VAR_DMGRPHC_ELGBLTY', 'VAR_DMGRPHC_ELE_EFCTV_DT', 'VAR_DMGRPHC_ELE_END_DT')
 
+        self.tab_no = 'ELG00003A'
+        self.create_initial_table()
+        self.tab_no = 'ELG00003'
+
     # ---------------------------------------------------------------------------------
     #
     #
@@ -50,8 +54,11 @@ class ELG00003(ELG):
                     submtg_state_cd,
                     msis_ident_num,
                     count(TMSIS_RUN_ID) as recCt
-                    from {self.tab_no}_v
-                    group by submtg_state_cd, msis_ident_num
+                from
+                    {self.tab_no}_v
+                group by
+                    submtg_state_cd,
+                    msis_ident_num
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -63,12 +70,12 @@ class ELG00003(ELG):
                 create or replace temporary view {self.tab_no}_uniq as
                 select
                     t1.*,
-                    { BSF_Metadata.encodePrimaryLanguage('t1') },
+                    { BSF_Metadata.encodePrimaryLanguage() },
 
                     1 as KEEP_FLAG
 
                 from
-                    {self.tab_no}_v t1
+                    {self.tab_no}_v as t1
                 inner join
                     {self.tab_no}_recCt as t2
                     on
@@ -84,9 +91,10 @@ class ELG00003(ELG):
         sort_key = """coalesce(mrtl_stus_cd,'xx') || coalesce(cast(ssn_num as char(10)),'xx') || coalesce(incm_cd,'xx') ||
                       coalesce(vet_ind,'xx') || coalesce(ctznshp_ind,'xx') || coalesce(imgrtn_stus_cd,'xx') ||
                       coalesce(upper(prmry_lang_cd),'xx') || coalesce(hsehld_size_cd,'xx') || coalesce(mdcr_hicn_num,'xx') ||
-                      coalesce(chip_cd,'xx') || coalesce(prmry_lang_englsh_prfcncy_cd,'xx')"
+                      coalesce(chip_cd,'xx') || coalesce(prmry_lang_englsh_prfcncy_cd,'xx')
                     """
-        self.MultiIds(self, sort_key, '', '_v')
+
+        self.MultiIds(BSF_Metadata.encodePrimaryLanguage(), sort_key, '', '', '_v')
 
         # title "Number of beneficiares who were processed for duplicates in {self.tab_no}"
 
@@ -111,7 +119,7 @@ class ELG00003(ELG):
                             max(case when trim(PRGNT_IND) in('0','1') then cast(trim(PRGNT_IND) as integer)
                                     else null end) as PREGNANCY_FLAG
                     from
-                        {self.tab_no}.A
+                        {self.tab_no}A
                     group by
                         SUBMTG_STATE_CD,
                         MSIS_IDENT_NUM) preg

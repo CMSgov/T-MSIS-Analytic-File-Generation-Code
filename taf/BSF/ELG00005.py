@@ -24,51 +24,56 @@ class ELG00005(ELG):
 
     # ---------------------------------------------------------------------------------
     #
-    #
+    #  1  Full Dual
+    #  2  Partial Dual
+    #  3  Other Dual
+    #  4  Non-Dual
     #
     #
     # ---------------------------------------------------------------------------------
     def create(self):
 
-        ELGBLTY_GRP_CODE = f"""
+        ELGBLTY_GRP_CODE = """
             case when length(trim(ELGBLTY_GRP_CD))=1 and ELGBLTY_GRP_CD <> '.'
             then lpad(trim(ELGBLTY_GRP_CD),2,'0')
             else trim(ELGBLTY_GRP_CD) end """
 
-        DUAL_ELGBL_CODE = f"""
+        DUAL_ELGBL_CODE = """
             case when length(trim(DUAL_ELGBL_CD))=1 and DUAL_ELGBL_CD <> '.'
             then lpad(trim(DUAL_ELGBL_CD),2,'0')
             else trim(DUAL_ELGBL_CD) end """
 
         created_vars = f"""
-            &ELGBLTY_GRP_CODE as ELGBLTY_GRP_CODE,
-            &DUAL_ELGBL_CODE as DUAL_ELGBL_CODE,
+            {ELGBLTY_GRP_CODE} as ELGBLTY_GRP_CODE,
+            {DUAL_ELGBL_CODE} as DUAL_ELGBL_CODE,
 
             case when LENGTH(trim(CARE_LVL_STUS_CD))<3 and CARE_LVL_STUS_CD <> '.' then lpad(CARE_LVL_STUS_CD,3,'00')
                 else CARE_LVL_STUS_CD end as CARE_LVL_STUS_CODE,
 
-            case when DUAL_ELGBL_CODE in('02','04','08')      	then 1 /* Full Dual
-                when DUAL_ELGBL_CODE in('01','03','05','06')  then 2 /* Partial Dual
-                when DUAL_ELGBL_CODE in('09','10')		    then 3 /* Other Dual
-                when DUAL_ELGBL_CODE in('00')				    then 4 /* Non-Dual
+            case
+                when ({DUAL_ELGBL_CODE}) in ('02','04','08')      then 1
+                when ({DUAL_ELGBL_CODE}) in ('01','03','05','06') then 2
+                when ({DUAL_ELGBL_CODE}) in ('09','10')           then 3
+                when ({DUAL_ELGBL_CODE}) in ('00')                then 4
                 else null end as DUAL_ELIGIBLE_FLG,
 
-            case when (ELGBLTY_GRP_CODE between '01' and '09') or
-                    (ELGBLTY_GRP_CODE between '72' and '75') then 1
-                when (ELGBLTY_GRP_CODE between '11' and '19') or
-                    (ELGBLTY_GRP_CODE between '20' and '26') then 2
-                when (ELGBLTY_GRP_CODE between '27' and '29') or
-                    (ELGBLTY_GRP_CODE between '30' and '36') or
-                    (ELGBLTY_GRP_CODE = '76')                then 3
-                when (ELGBLTY_GRP_CODE between '37' and '39') or
-                    (ELGBLTY_GRP_CODE between '40' and '49') or
-                    (ELGBLTY_GRP_CODE between '50' and '52') then 4
-                when (ELGBLTY_GRP_CODE between '53' and '56') then 5
-                when (ELGBLTY_GRP_CODE in('59','60'))         then 6
-                when (ELGBLTY_GRP_CODE in('61','62','63')) then 7
-                when (ELGBLTY_GRP_CODE in('64','65','66')) then 8
-                when (ELGBLTY_GRP_CODE in('67','68')) then 9
-                when (ELGBLTY_GRP_CODE in('69','70','71'))    then 10
+            case
+                when (({ELGBLTY_GRP_CODE}) between '01' and '09') or
+                     (({ELGBLTY_GRP_CODE}) between '72' and '75') then 1
+                when (({ELGBLTY_GRP_CODE}) between '11' and '19') or
+                     (({ELGBLTY_GRP_CODE}) between '20' and '26') then 2
+                when (({ELGBLTY_GRP_CODE}) between '27' and '29') or
+                     (({ELGBLTY_GRP_CODE}) between '30' and '36') or
+                     (({ELGBLTY_GRP_CODE}) = '76')                then 3
+                when (({ELGBLTY_GRP_CODE}) between '37' and '39') or
+                     (({ELGBLTY_GRP_CODE}) between '40' and '49') or
+                     (({ELGBLTY_GRP_CODE}) between '50' and '52') then 4
+                when (({ELGBLTY_GRP_CODE}) between '53' and '56') then 5
+                when (({ELGBLTY_GRP_CODE}) in('59','60'))         then 6
+                when (({ELGBLTY_GRP_CODE}) in('61','62','63')) then 7
+                when (({ELGBLTY_GRP_CODE}) in('64','65','66')) then 8
+                when (({ELGBLTY_GRP_CODE}) in('67','68')) then 9
+                when (({ELGBLTY_GRP_CODE}) in('69','70','71'))    then 10
                 else null end as ELIGIBILITY_GROUP_CATEGORY_FLG,
 
                 case when MAS_CD = '.' or ELGBLTY_MDCD_BASIS_CD='.' then '.'
@@ -78,7 +83,7 @@ class ELG00005(ELG):
         #  Create temp table to determine which beneficiaries have multiple records
         z = f"""
 
-            create or replace temporary view {self.tab_no}_recCt
+            create or replace temporary view {self.tab_no}_recCt as
 
             select
                 submtg_state_cd,
@@ -96,7 +101,7 @@ class ELG00005(ELG):
 
         #  Set aside table data for benes with only one record
         z = f"""
-            create or replace temporary view {self.tab_no}_uniq
+            create or replace temporary view {self.tab_no}_uniq as
             select t1.*,
 
                 {created_vars},
@@ -125,12 +130,11 @@ class ELG00005(ELG):
             coalesce(trim(mas_cd),'x')  || coalesce(trim(rstrctd_bnfts_cd),'x')  ||
             coalesce(trim(tanf_cash_cd),'x')  || coalesce(trim(prmry_elgblty_grp_ind),'x')"""
 
-        self.MultiIds(self, sort_key, "PRMRY_ELGBLTY_GRP_IND='1'")
+        self.MultiIds(created_vars, sort_key, "PRMRY_ELGBLTY_GRP_IND='1'")
 
         #  Union together tables for a permanent table
         z = f"""
-            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq
-
+            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
 
             select *
 

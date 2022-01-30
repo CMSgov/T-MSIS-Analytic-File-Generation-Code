@@ -52,7 +52,7 @@ class ELG00022(ELG):
                 msis_ident_num,
                 count(msis_ident_num) as recCt
                 from {self.tab_no}
-                where ELGBL_ID_TYPE_CD = &code
+                where ELGBL_ID_TYPE_CD = {code}
                 and nullif(trim(elgbl_id),'') is not null
                 group by submtg_state_cd, msis_ident_num
                 """
@@ -71,12 +71,12 @@ class ELG00022(ELG):
                     1 as KEEP_FLAG
 
                 from {self.tab_no} t1
-                inner join {self.tab_no}_{id_type}_recCt  t2
+                inner join {self.tab_no}_{id_type}_recCt as t2
                 on t1.submtg_state_cd = t2.submtg_state_cd
                 and t1.msis_ident_num = t2.msis_ident_num
                 and t2.recCt=1
 
-                where ELGBL_ID_TYPE_CD = &code
+                where ELGBL_ID_TYPE_CD = {code}
                 and nullif(trim(elgbl_id),'') is not null
                 """
         self.bsf.append(type(self).__name__, z)
@@ -89,9 +89,9 @@ class ELG00022(ELG):
 
         sort_key = "coalesce(trim(elgbl_id),'xx') || coalesce(trim(elgbl_id_issg_ent_id_txt),'xx') || coalesce(trim(rsn_for_chg),'xx'))"
 
-        where = f"ELGBL_ID_TYPE_CD = &code and nullif(trim(elgbl_id),'') is not null)"
+        where = f"ELGBL_ID_TYPE_CD = {code} and nullif(trim(elgbl_id),'') is not null)"
 
-        self.MultiIds(self, sort_key, where, '_' + id_type)
+        self.MultiIds(created_vars, sort_key, where, '_' + id_type)
 
         # title "Number of beneficiares who were processed for duplicates in {self.tab_no} - &id_type"
         # select * from connection to tmsis_passthrough
@@ -120,7 +120,6 @@ class ELG00022(ELG):
 
         z = f"""
             create or replace temporary view {self.tab_no}_uniq_step2 as
-
 
             select * from {self.tab_no}_MSIS_XWALK_uniq
             union all

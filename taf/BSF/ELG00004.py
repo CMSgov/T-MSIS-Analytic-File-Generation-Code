@@ -41,9 +41,9 @@ class ELG00004(ELG):
                 lpad(elgbl_state_cd,2,'0') as elgbl_state_cd_{loc},
                 elgbl_phne_num as elgbl_phne_num_{loc}"""
 
-        #  Create temp table to determine which beneficiaries have multiple records 
+        #  Create temp table to determine which beneficiaries have multiple records
         z = f"""
-            create or replace temporary view {self.tab_no}_recCt
+            create or replace temporary view {self.tab_no}_recCt as
             select
                 submtg_state_cd,
                 msis_ident_num,
@@ -58,9 +58,9 @@ class ELG00004(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select recCt,count(msis_ident_num) as beneficiaries from {self.tab_no}_recCt asgroup by recCt ) order by recCt
 
-        #  Set aside table data for benes with only one record 
+        #  Set aside table data for benes with only one record
         z = f"""
-            create or replace temporary view {self.tab_no}_uniq
+            create or replace temporary view {self.tab_no}_uniq as
             select t1.*,
                 {created_vars},
                 1 as KEEP_FLAG
@@ -81,7 +81,7 @@ class ELG00004(ELG):
 
         sort_key = """coalesce(trim(elgbl_line_1_adr),'xx') || coalesce(trim(elgbl_city_name),'xx') || coalesce(trim(elgbl_cnty_cd),'xx') ||
                       coalesce(trim(elgbl_phne_num),'xx') || coalesce(trim(elgbl_state_cd),'xx') || coalesce(trim(elgbl_zip_cd),'xx')"""
-        self.MultiIds(self, sort_key, "ELGBL_ADR_TYPE_CD in ('01','1')")
+        self.MultiIds(created_vars, sort_key, "ELGBL_ADR_TYPE_CD in ('01','1')")
 
         # title "Number of beneficiares who were processed for duplicates in {self.tab_no}"
         # select * from connection to tmsis_passthrough
@@ -100,9 +100,9 @@ class ELG00004(ELG):
             elgbl_phne_num as elgbl_phne_num_{loc}
         """
 
-        #  Create temp table to determine which beneficiaries have multiple records 
+        #  Create temp table to determine which beneficiaries have multiple records
         z = f"""
-            create or replace temporary view {self.tab_no}A_recCt
+            create or replace temporary view {self.tab_no}A_recCt as
             select
                 submtg_state_cd,
                 msis_ident_num,
@@ -117,10 +117,10 @@ class ELG00004(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select recCt,count(msis_ident_num) as beneficiaries from {self.tab_no}A_recCt group by recCt ) order by recCt
 
-        #  Set aside table data for benes with only one record 
+        #  Set aside table data for benes with only one record
 
         z = f"""
-            create or replace temporary view {self.tab_no}A_uniq
+            create or replace temporary view {self.tab_no}A_uniq as
             select t1.*,
                     {created_vars},
                     1 as KEEP_FLAG
@@ -141,19 +141,19 @@ class ELG00004(ELG):
         sort_key = """coalesce(trim(elgbl_line_1_adr),'xx') || coalesce(trim(elgbl_city_name),'xx') || coalesce(trim(elgbl_cnty_cd),'xx') ||
                       coalesce(trim(elgbl_phne_num),'xx') || coalesce(trim(elgbl_state_cd),'xx') || coalesce(trim(elgbl_zip_cd),'xx')"""
 
-        self.MultiIds(self, sort_key, "ELGBL_ADR_TYPE_CD in ('06','6')", 'A')
+        self.MultiIds(created_vars, sort_key, "ELGBL_ADR_TYPE_CD in ('06','6')", 'A')
 
-        # Union together tables for a permanent table 
+        # Union together tables for a permanent table
         z = f"""
-            create or replace temporary view {self.tab_no}_uniq_step1
+            create or replace temporary view {self.tab_no}_uniq_step1 as
             select * from {self.tab_no}_uniq
             union all
             select * from {self.tab_no}_multi
         """
         self.bsf.append(type(self).__name__, z)
-        
+
         z = f"""
-            create or replace temporary view {self.tab_no}_uniq_step2
+            create or replace temporary view {self.tab_no}_uniq_step2 as
             select * from {self.tab_no}A_uniq
             union all
             select * from {self.tab_no}A_multi
@@ -161,7 +161,7 @@ class ELG00004(ELG):
         self.bsf.append(type(self).__name__, z)
 
         z = f"""
-            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq
+            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
             select
                 coalesce(t1.msis_ident_num,t2.msis_ident_num) as msis_ident_num,
                 coalesce(t1.submtg_state_cd,t2.submtg_state_cd) as submtg_state_cd,

@@ -25,11 +25,11 @@ class BSF_Runner():
 
         self.now = datetime.now()
         self.version = '1.0.1'
-        # self.initialize_logger(self.now)
+        self.initialize_logger(self.now)
 
-        self.submtg_state_cd = '01'
-        self.tmsis_run_id = 4289
-        self.DA_RUN_ID = 5678
+        self.submtg_state_cd = '00'
+        self.tmsis_run_id = 0000
+        self.DA_RUN_ID = 0
 
         self.reporting_period = datetime.strptime(reporting_period, '%Y-%m-%d')
 
@@ -185,7 +185,6 @@ class BSF_Runner():
         from taf.BSF.ELG00018 import ELG00018
         from taf.BSF.ELG00020 import ELG00020
         from taf.BSF.ELG00021 import ELG00021
-        from taf.BSF.ELG00022 import ELG00022
         from taf.BSF.TPL00002 import TPL00002
 
         ELG00002(self).create()
@@ -207,8 +206,6 @@ class BSF_Runner():
         ELG00018(self).create()
         ELG00020(self).create()
         ELG00021(self).create()
-        ELG00022(self).create()
-        ELG00005(self).create()
         TPL00002(self).create()
 
     # ---------------------------------------------------------------------------------
@@ -218,7 +215,83 @@ class BSF_Runner():
     #
     # ---------------------------------------------------------------------------------
     def run(self):
-        print("run")
+
+        from taf.BSF.BSF_Metadata import BSF_Metadata
+        from pyspark.sql.types import StructType, StructField, StringType
+        import pandas as pd
+
+        from pyspark.sql import SparkSession
+        spark = SparkSession.getActiveSession()
+
+        df = pd.DataFrame(BSF_Metadata.prmry_lang_cd, columns=['LANG_CD'])
+        schema = StructType([StructField("LANG_CD", StringType(), True)])
+
+        sdf = spark.createDataFrame(data=df, schema=schema)
+        sdf.registerTempTable('prmry_lang_cd')
+
+        self.logger.info('Creating BSF Views...')
+
+        for segment, chain in self.plan.items():
+            self.logger.info('\t' + segment + '...')
+            for z in chain:
+                # self.logger.info('\n'.join(z.split('\n')[0:2]))
+
+                v = '\n'.join(z.split('\n')[0:2])
+                vs = v.split()
+
+                if len(vs) >= 5:
+                    print('\t\t' + vs[5])
+
+                # self.logger.info('\t\t' + v.split()[5])
+
+                spark.sql(z)
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
+    def ssn_ind(self):
+
+        z = f"""
+                create or replace temporary view ssn_ind as
+                select
+
+                -- %if &sub_env in (prod) %then
+                -- /** In higher environments, enforce a distinct ssn_ind **/
+
+                distinct
+
+                    submtg_state_cd
+
+                -- %if &sub_env in(pre_dev uat_val) %then
+                -- %do;
+                --     /** In lower environments, take a max ssn_ind **/
+                --     ,max(ssn_ind) as ssn_ind
+                -- %end; %else
+                -- %do;
+                --     /** In prod it should be distinct, so throw error otherwise**/
+                --     ,ssn_ind
+                -- %end;
+
+                from
+                    tmsis.tmsis_fhdr_rec_elgblty
+
+                where
+                    tmsis_actv_ind = 1
+                        and tmsis_rptg_prd is not null
+                        and tot_rec_cnt > 0
+                        and ssn_ind in ('1','0')
+                        and (submtg_state_cd,tmsis_run_id) in (&combined_list)
+
+                -- %if &sub_env in(pre_dev uat_val) %then
+                -- %do;
+                --     group by submtg_state_cd
+                -- %end;
+            """
+        self.append('SSN_IND', z)
+
 
 # -----------------------------------------------------------------------------
 # CC0 1.0 Universal

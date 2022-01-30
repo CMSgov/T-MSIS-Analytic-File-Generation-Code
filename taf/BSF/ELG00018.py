@@ -28,7 +28,7 @@ class ELG00018(ELG):
     # ---------------------------------------------------------------------------------
     def create(self):
 
-        created_vars = f"case when SECT_1115A_DEMO_IND = '1' then 1 else 0 end as _1115A_PARTICIPANT_FLG"
+        created_vars = "case when SECT_1115A_DEMO_IND = '1' then 1 else 0 end as _1115A_PARTICIPANT_FLG"
 
         #  Create temp table to determine which beneficiaries have multiple records
         z = f"""
@@ -69,7 +69,7 @@ class ELG00018(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select count(msis_ident_num) as beneficiaries from {self.tab_no}_uniq )
 
-        self.MultiIds(self, "coalesce(SECT_1115A_DEMO_IND,'xx')")
+        self.MultiIds(created_vars, "coalesce(SECT_1115A_DEMO_IND,'xx')")
 
         #  Union together tables for a permanent table
         z = f"""

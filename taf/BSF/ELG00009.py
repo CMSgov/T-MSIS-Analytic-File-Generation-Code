@@ -1,3 +1,4 @@
+from pandas import concat
 from taf.BSF import BSF_Runner
 from taf.BSF.BSF_Metadata import BSF_Metadata
 
@@ -53,6 +54,21 @@ class ELG00009(ELG):
     #
     #
     # ---------------------------------------------------------------------------------
+    def lckin_flag(self, max_keep):
+
+        lckin_flags = []
+        for i in list(range(1, 3 + 1)):
+            if i <= max_keep:
+                lckin_flags.append(f"t{i}.LCKIN_PRVDR_NUM is not null".format())
+
+        return ' or '.join(lckin_flags)
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
     def create(self):
 
         z = f"""
@@ -71,7 +87,7 @@ class ELG00009(ELG):
                 row_number() over (partition by submtg_state_cd,
                                         msis_ident_num,
                                         lckin_prvdr_num,
-                                        lckin_prvdr_type_code
+                                        lpad(lckin_prvdr_type_cd,2,'0')
                             order by submtg_state_cd,
                                         msis_ident_num,
                                         TMSIS_RPTG_PRD desc,
@@ -79,7 +95,7 @@ class ELG00009(ELG):
                                         {self.end_date} desc,
                                         REC_NUM desc,
                                         lckin_prvdr_num,
-                                        lckin_prvdr_type_code) as lckin_deduper
+                                        lpad(lckin_prvdr_type_cd,2,'0')) as lckin_deduper
 
                 from (select * from {self.tab_no} where lckin_prvdr_num is not null
                                             or lckin_prvdr_type_cd is not null) t1
@@ -115,7 +131,7 @@ class ELG00009(ELG):
         # select max_keep into :max_keep
         # from (select * from connection to tmsis_passthrough
         #       (select max(keeper) as max_keep from {self.tab_no}_step2))
-        max_keep = 0
+        max_keep = 2
 
         z = f"""
             create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
@@ -124,16 +140,14 @@ class ELG00009(ELG):
                 t1.submtg_state_cd
                 ,t1.msis_ident_num
 
-                { self.lckin_prvdr(2) }
+                { self.lckin_prvdr(max_keep) }
 
-                ,case when LCKIN_PRVDR_NUM1 is not null or
-                    LCKIN_PRVDR_NUM2 is not null or
-                    LCKIN_PRVDR_NUM3 is not null
-                then 1 else 2 end as LOCK_IN_FLG
+                , case when ({ self.lckin_flag(max_keep) })
+                  then 1 else 2 end as LOCK_IN_FLG
 
                 from (select * from {self.tab_no}_step2 where keeper=1) t1
 
-                { BSF_Metadata.dedup_tbl_joiner('ELG0009', range(2, 3 + 1), max_keep) }
+                { BSF_Metadata.dedup_tbl_joiner('ELG00009', range(2, 3 + 1), max_keep) }
 
                 """
         self.bsf.append(type(self).__name__, z)

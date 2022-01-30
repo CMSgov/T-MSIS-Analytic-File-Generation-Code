@@ -73,11 +73,11 @@ class ELG00006(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select count(msis_ident_num) as beneficiaries from {self.tab_no}_uniq )
 
-        self.MultiIds(self, "coalesce(trim(HH_ENT_NAME),'xx')")
+        self.MultiIds(created_vars, "coalesce(trim(HH_ENT_NAME),'xx')")
 
         #  Union together tables for a permanent table
         z = f"""
-            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq
+            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
             select
                 *
             from (

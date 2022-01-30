@@ -1,4 +1,5 @@
 from taf.BSF import BSF_Runner
+from taf.BSF.BSF_Metadata import BSF_Metadata
 
 from taf.BSF.ELG import ELG
 
@@ -19,6 +20,30 @@ class ELG00014(ELG):
     # ---------------------------------------------------------------------------------
     def __init__(self, bsf: BSF_Runner):
         ELG.__init__(self, bsf, 'ELG00014', 'TMSIS_MC_PRTCPTN_DATA', 'MC_PLAN_ENRLMT_EFCTV_DT', 'MC_PLAN_ENRLMT_END_DT')
+
+    # ---------------------------------------------------------------------------------
+    #
+    #
+    #
+    #
+    # ---------------------------------------------------------------------------------
+    def mc_plan(self, max_keep):
+
+        mc_plans = []
+        new_line = '\n\t\t\t'
+        for i in list(range(1, 16 + 1)):
+            if i <= max_keep:
+                mc_plans.append(f"""
+                    , t{i}.MC_PLAN_IDENTIFIER as MC_PLAN_ID{i}
+                    , t{i}.ENRLD_MC_PLAN_TYPE_CODE as MC_PLAN_TYPE_CD{i}
+                """.format())
+            else:
+                mc_plans.append(f"""
+                    , cast(null as varchar(12)) as MC_PLAN_ID{i}
+                    , cast(null as varchar(2)) as MC_PLAN_TYPE_CD{i}
+                """.format())
+
+        return new_line.join(mc_plans)
 
     # ---------------------------------------------------------------------------------
     #
@@ -55,14 +80,15 @@ class ELG00014(ELG):
                 {self.eff_date},
                 {self.end_date},
                 tmsis_rptg_prd,
-                &MC_PLAN as MC_PLAN_IDENTIFIER,
-                case when MC_PLAN_IDENTIFIER is null and &ENRLD_MC_PLAN_TYPE_CODE = '00' then null
-                    else &ENRLD_MC_PLAN_TYPE_CODE end as ENRLD_MC_PLAN_TYPE_CODE,
+                {mc_plan} as MC_PLAN_IDENTIFIER,
+                case when ({mc_plan}) is null and {ENRLD_MC_PLAN_TYPE_CODE} = '00' then null
+                    else {ENRLD_MC_PLAN_TYPE_CODE} end as ENRLD_MC_PLAN_TYPE_CODE,
 
                 row_number() over (partition by submtg_state_cd,
                                         msis_ident_num,
-                                        MC_PLAN_IDENTIFIER,
-                                        ENRLD_MC_PLAN_TYPE_CODE
+                                        {mc_plan},
+                                        (case when ({mc_plan}) is null and {ENRLD_MC_PLAN_TYPE_CODE} = '00' then null
+                                         else {ENRLD_MC_PLAN_TYPE_CODE} end)
 
                             order by submtg_state_cd,
                                         msis_ident_num,
@@ -70,8 +96,9 @@ class ELG00014(ELG):
                                         {self.eff_date} desc,
                                         {self.end_date} desc,
                                         REC_NUM desc,
-                                        MC_PLAN_IDENTIFIER,
-                                        ENRLD_MC_PLAN_TYPE_CODE) as mc_deduper
+                                        {mc_plan},
+                                        (case when ({mc_plan}) is null and {ENRLD_MC_PLAN_TYPE_CODE} = '00' then null
+                                         else {ENRLD_MC_PLAN_TYPE_CODE} end)) as mc_deduper
 
                 from (select * from {self.tab_no}
                     where enrld_mc_plan_type_cd is not null
@@ -110,6 +137,7 @@ class ELG00014(ELG):
         #       (select max(keeper) as max_keep from {self.tab_no}_step2))
 
         # %check_max_keep(16)
+        max_keep = 16
 
         z = f"""
             create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
@@ -118,27 +146,11 @@ class ELG00014(ELG):
                 t1.submtg_state_cd
                 ,t1.msis_ident_num
 
-                %do I=1 %to 16
-                %if %eval(&I <= &max_keep) %then
-                    %do
-                    ,t&I..MC_PLAN_IDENTIFIER as MC_PLAN_ID&I.
-                    ,t&I..ENRLD_MC_PLAN_TYPE_CODE as MC_PLAN_TYPE_CD&I.
-
-                    %end %else
-                    %do
-                    ,cast(null as varchar(12)) as MC_PLAN_ID&I.
-                    ,cast(null as varchar(2)) as MC_PLAN_TYPE_CD&I.
-                    %end
-                %end
+                { self.mc_plan(max_keep) }
 
                 from (select * from {self.tab_no}_step2 where keeper=1) t1
 
-                %do I=2 %to 16
-                %if %eval(&I <= &max_keep) %then
-                    %do
-                    %dedup_tbl_joiner(&I)
-                    %end
-                %end
+                { BSF_Metadata.dedup_tbl_joiner('ELG00014', range(2, 17), max_keep) }
 
                 """
         self.bsf.append(type(self).__name__, z)

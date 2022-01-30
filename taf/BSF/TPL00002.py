@@ -65,7 +65,7 @@ class TPL00002(ELG):
         # select * from connection to tmsis_passthrough
         #  ( select count(msis_ident_num) as beneficiaries from {self.tab_no}_uniq )
 
-        self.MultiIds(self, "coalesce(trim(tpl_insrnc_cvrg_ind),'xx') || coalesce(trim(tpl_othr_cvrg_ind),'xx')")
+        self.MultiIds('', "coalesce(trim(tpl_insrnc_cvrg_ind),'xx') || coalesce(trim(tpl_othr_cvrg_ind),'xx')")
 
         # Union together tables for a permanent table
         z = f"""

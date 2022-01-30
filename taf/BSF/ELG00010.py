@@ -87,14 +87,14 @@ class ELG00010(ELG):
         #  ( select count(msis_ident_num) as beneficiaries from {self.tab_no}_uniq )
 
         sort_key = f"""coalesce(trim(mfp_lvs_wth_fmly_cd),'xx') || coalesce(trim(mfp_qlfyd_instn_cd),'xx') ||
-                                coalesce(trim(mfp_qlfyd_rsdnc_cd),'xx') || coalesce(trim(mfp_prtcptn_endd_rsn_cd),'xx') ||
-                                coalesce(trim(mfp_rinstlzd_rsn_cd),'xx')"""
+                       coalesce(trim(mfp_qlfyd_rsdnc_cd),'xx') || coalesce(trim(mfp_prtcptn_endd_rsn_cd),'xx') ||
+                       coalesce(trim(mfp_rinstlzd_rsn_cd),'xx')"""
 
-        self.MultiIds(self, sort_key)
+        self.MultiIds(created_vars, sort_key)
 
         #  Union together tables for a permanent table
         z = f"""
-            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq
+            create or replace temporary view {self.tab_no}_{self.bsf.BSF_FILE_DATE}_uniq as
 
             select *
 

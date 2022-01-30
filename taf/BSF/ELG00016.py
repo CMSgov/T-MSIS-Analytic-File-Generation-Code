@@ -53,7 +53,7 @@ class ELG00016(ELG):
         self.bsf.append(type(self).__name__, z)
 
         z = f"""
-            create or replace temporary view {self.tab_no}_step2
+            create or replace temporary view {self.tab_no}_step2 as
 
 
                 select *

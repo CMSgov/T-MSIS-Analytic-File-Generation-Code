@@ -21,6 +21,8 @@ class ELG():
         self.eff_date = eff_date
         self.end_date = end_date
 
+        self.create_initial_table()
+
     # ---------------------------------------------------------------------------------
     #
     #
@@ -28,9 +30,8 @@ class ELG():
     #
     # ---------------------------------------------------------------------------------
     def create(self):
-
-        self.create_initial_table()
-        self.create()
+        print('')
+        # self.create()
 
     # ---------------------------------------------------------------------------------
     #
@@ -63,6 +64,7 @@ class ELG():
 
                 limit 1000
             """
+        # 83,192,641
         self.bsf.append(type(self).__name__, z)
 
     # ---------------------------------------------------------------------------------
@@ -71,20 +73,19 @@ class ELG():
     #
     #
     # ---------------------------------------------------------------------------------
-    def MultiIds(self, sort_key: str = '', where: str = '', suffix: str = '', val: str = ''):
+    def MultiIds(self, created_vars: str, sort_key: str = '', where: str = '', suffix: str = '', val: str = ''):
 
         if len(where) > 1:
-            where = 'where' + where
+            where = 'where ' + where
 
         z = f"""
-                create or replace temporary view {self.tab_no}_multi_all as
+                create or replace temporary view {self.tab_no}{suffix}_multi_all as
                 select
-                    t1.*,
-                    upper(GNDR_CD) as GNDR_CODE
+                    {','.join(filter(None, ['t1.*', created_vars]))}
                 from
-                    {self.tab_no} t1
+                    {self.tab_no}{val} as t1
                 inner join
-                    {self.tab_no}_recCt as t2
+                    {self.tab_no}{suffix}_recCt as t2
                     on t1.submtg_state_cd = t2.submtg_state_cd
                     and t1.msis_ident_num = t2.msis_ident_num
                     and t2.recCt > 1
@@ -94,7 +95,7 @@ class ELG():
         self.bsf.append(type(self).__name__, z)
 
         z = f"""
-                create or replace temporary view {self.tab_no}_multi_step2 as
+                create or replace temporary view {self.tab_no}{suffix}_multi_step2 as
                 select
                     *,
                     row_number() over (
@@ -111,9 +112,10 @@ class ELG():
                         {sort_key}
                         ) as KEEP_FLAG
 
-                from {self.tab_no}_multi_all
+                from {self.tab_no}{suffix}_multi_all
 
                 {where}
+
             """
         self.bsf.append(type(self).__name__, z)
 
@@ -121,7 +123,7 @@ class ELG():
         # select count(msis_ident_num) as beneficiaries from {self.tab_no}_multi
 
         z = f"""
-                create or replace temporary view {self.tab_no}_multi as
+                create or replace temporary view {self.tab_no}{suffix}_multi as
                 select
                     *
                 from
