@@ -117,10 +117,11 @@
 		select a.&file._fil_dt
 		       ,b.submtg_state_cd
 			   ,max(b.da_run_id) as da_run_id
+			   ,b.fil_cret_dt
 
 		from job_cntl_parms_both_&file._&inyear. a
 		     inner join
-			 (select da_run_id, incldd_state_cd as submtg_state_cd 
+			 (select da_run_id, incldd_state_cd as submtg_state_cd, fil_cret_dt
               from &DA_SCHEMA..efts_fil_meta where fil_4th_node_txt=%nrbquote('&node.') &alt_node_cond. and incldd_state_cd != 'Missing' ) b
 
 		on a.da_run_id = b.da_run_id
@@ -131,6 +132,7 @@
 
 		group by a.&file._fil_dt
 		        ,b.submtg_state_cd
+				,b.fil_cret_dt
 
 	) by tmsis_passthrough;
 
@@ -139,12 +141,15 @@
 	   that go into each annual DE file */
 
 	execute (
-		insert into &DA_SCHEMA..TAF_ANN_DE_INP_SRC
+		insert into &DA_SCHEMA..TAF_ANN_INP_SRC
 		select
 			&DA_RUN_ID. as ANN_DA_RUN_ID,
+			'ade' as ann_fil_type,
 			SUBMTG_STATE_CD,
-			&file._FIL_DT,
-			DA_RUN_ID as SRC_DA_RUN_ID
+			%nrbquote(lower('&file.')) as src_fil_type,
+			&file._FIL_DT as src_fil_dt,
+			DA_RUN_ID as SRC_DA_RUN_ID,
+			fil_cret_dt as src_fil_creat_dt
 
 		from max_run_id_&file._&inyear.
 
@@ -793,11 +798,15 @@
 %mend nonmiss_month;
 
 
-/*Macro age_calculcate looks at the value of birth date which is already considered acrosss the historical period 
-and calculcates */
+/*Macro age_date_calculate performs two operations:
+(1) replicates the calculation of age to be similar to how it's considered in the BSF (based on the last month of enrollment).
 
-%macro age_calculate();	
+(2) creates an indicator for the end of enrollment period based on the last month 
+*/
 
+%macro age_date_calculate();	
+
+	/*Calculate Age*/
 		case
 			%do m = 1 %to 12;
 				when BSF_RECORD = %tslit(%sysfunc(putn(&m.,z2))) then last_day(%nrbquote('&year.-%sysfunc(putn(&m.,z2))-01'))  
@@ -827,6 +836,12 @@ and calculcates */
 				when AGE_NUM between 85 and 125 then 10
 		 else null
 		 end as AGE_GRP_FLAG,
+
+	/*Calculate the enrollment end date*/
+		case when BSF_RECORD = '12' then ELGBL_AFTR_EOM_TEMP
+		  else 0 
+		end as ELGBL_AFTR_EOY_IND,
+
 
 %mend;
 

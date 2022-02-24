@@ -5,10 +5,6 @@
 /*Purpose: Generate the annual UP TAF
 /*Mod: 
 /**********************************************************************************************/
-/* Copyright (C) Mathematica Policy Research, Inc.                                            */
-/* This code cannot be copied, distributed or used without the express written permission     */
-/* of Mathematica Policy Research, Inc.                                                       */ 
-/**********************************************************************************************/
 
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
@@ -144,8 +140,8 @@ PROC SQL;
 QUIT;
 
 %let DA_RUN_ID=&DA_RUN_ID.;
-
 ** Create YEAR macro parm from REPORTING_PERIOD, and set other needed macro parms;
+
 
 data _null_;
 	call symput('YEAR',year(input(strip("&REPORTING_PERIOD"),YYMMDD12.)));
@@ -300,7 +296,6 @@ proc sql ;
 
 		%base_line_comb;
 
-
 		** 1e: Call the macro base_lt_days (macro in 005_up_base_lt) to roll up the LT lines to the header-level, taking the min service
 		       begin date (if header-level begin date is null) to then calculate unique LT days by MDCD/SCHIP, NXOVR/XOVR, and FFS/MC;
 
@@ -349,7 +344,7 @@ proc sql ;
 
 		sysecho 'in jobcntl updt2';
 		%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.); 
-
+		
 	%mend build_up;
 
 	%build_up;

@@ -7,12 +7,6 @@
 /* Mod:			8/4/17 by CA for interim soluiton 						  
 /*                                                                                                    
 /******************************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
 *********************************************************************
 *     QSSI PROVIDED MACROS FOR ENVIRONMENT                          *                           
 *     TMSIS_SCHEMA - OPERATIONAL_SCHEMA                             *       
@@ -49,6 +43,7 @@
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Shared_Macros.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Grouper_Macro.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/lt/programs/AWS_LT_Macros.sas";
+%INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/Fasc.sas";
 
 ********************************************************************
 * GLOBAL MACROS AND LOCAL MACROS                                   *
@@ -124,16 +119,18 @@ proc sql;
   %tmsis_connect;
     sysecho 'in max run ID for state';
     %AWS_MAXID_pull (&TMSIS_SCHEMA.,  TMSIS_FIL_PRCSG_JOB_CNTL); /* PULLS MAX RUN IDS FROM FILE HEADER - 01 SEGMENT*/
-
     sysecho 'in claims family';
 	%AWS_Claims_Family_Table_Link (&TMSIS_SCHEMA., CLT00002, TMSIS_CLH_REC_&fl, &fl, a.SRVC_ENDG_DT);  /* LT: a.SRVC_ENDG_DT */
+	sysecho 'in process_nppes';
+	%process_nppes();						
+	sysecho 'in process ccs';	
+    %process_ccs(); 	
     sysecho 'in extract line';
 	%AWS_Extract_Line_LT (&TMSIS_SCHEMA., &fl,&fl,CLT00003, TMSIS_CLL_REC_&fl, a.SRVC_ENDG_DT);
     sysecho 'in assign grouper data';  
 	%AWS_ASSIGN_GROUPER_DATA_CONV(filetyp=&fl, clm_tbl=&fl._HEADER, line_tbl=&fl._LINE, analysis_date=a.SRVC_ENDG_DT,MDC=NO,IAP=YES,PHC=YES,MH_SUD=YES,TAXONOMY=YES); 
 	sysecho 'in build lt';	
     %BUILD_LT();	
-
  	sysecho 'in jobcntl updt2';
 	%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.);
 	sysecho 'in get cnt';

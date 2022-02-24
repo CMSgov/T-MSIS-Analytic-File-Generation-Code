@@ -6,12 +6,7 @@
 /*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
+
 
 %macro hh_chk(col);
 case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
@@ -134,6 +129,8 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 
 				 when t16.GLOBAL_ISLANDER=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 5 
 
+				 when t16.OTHER_OTHER_FLG=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 8 
+
 				 when t15.HISPANIC_ETHNICITY_FLG=0 then null
 
                 else null end as RACE_ETHNICITY_FLAG,
@@ -163,6 +160,7 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 				when t16.SAMOAN_FLG=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 15
 			    when t16.OTHER_PAC_ISLANDER_FLG=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 16
 				when t16.UNK_PAC_ISLANDER_FLG=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 17			
+				when t16.OTHER_OTHER_FLG=1 and COALESCE(t15.HISPANIC_ETHNICITY_FLG,0)=0 then 21			
 				when t15.HISPANIC_ETHNICITY_FLG = 0 then null 
            else null end as RACE_ETHNCTY_EXP_FLAG,
 
@@ -175,7 +173,7 @@ case when t6.HH_PROGRAM_PARTICIPANT_FLG <> 1 then null else &col end
 			t17.DIFF_ERRANDS_ALONE_DISAB_FLG as DIFF_ERRANDS_ALONE_DISAB_FLAG,
 			t17.OTHER_DISAB_FLG as OTHER_DISAB_FLAG,
 
-			%ELG00018(18), t18._1115A_PARTICIPANT_FLG as _1115A_PARTICIPANT_FLAG,
+			%ELG00018(18), t18._1115A_PARTICIPANT_FLG::smallint as _1115A_PARTICIPANT_FLAG, 
 
 /*			%ELG00020(19),*/
 			t19.HCBS_AGED_NON_HHCC_FLG as HCBS_AGED_NON_HHCC_FLAG,

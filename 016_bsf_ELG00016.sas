@@ -3,14 +3,8 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_RACE_INFO and create unique output for BSF.
-/*Mod:  
+/*Mod:   12/06/2021: New valid value Other(018) for RACE 
 /*Notes: This program is included by 001_batch_bsf.sas
-/**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
 /**********************************************************************************************/
 
 %macro create_ELG00016(tab_no, _2x_segment, eff_date, end_date);
@@ -68,8 +62,9 @@ execute (
 	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='011' then 1 else 0 end) as UNKNOWN_ASIAN_FLG ,
 	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='001' then 1 else 0 end) as WHITE_FLG ,
 	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='002' then 1 else 0 end) as BLACK_AFRICAN_AMERICAN_FLG ,
-	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='003' then 1 else 0 end) as AIAN_FLG 	
-
+	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='003' then 1 else 0 end) as AIAN_FLG ,
+	   max(case when nullif(trim(RACE_CD),'') is null then null when trim(RACE_CD) ='018' then 1 else 0 end) as OTHER_OTHER_FLG
+	
 		from &tab_no
         group by submtg_state_cd, msis_ident_num
 		) by tmsis_passthrough;

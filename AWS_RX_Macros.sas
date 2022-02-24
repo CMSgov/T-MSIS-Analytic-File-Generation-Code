@@ -24,7 +24,8 @@
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
 /*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
 /*							-MACTAF-1593: Add NEW_REFL_IND valid value 99                                   */
-/*                                                                                                          */
+/* 				11/08/2021- DB modified to add FASC to TAF                                                  */
+/* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 
@@ -216,6 +217,8 @@ execute (
    ,%var_set_type2(COPAY_WVD_IND,0,cond1=0,cond2=1)
    ,cll_cnt
    ,num_cll 
+   ,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_ADD_TS
+   ,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_UPDT_TS 
 
 	from 	(select *,
      case when ADJSTMT_IND is NOT NULL and    
@@ -297,13 +300,25 @@ execute (
 
    ) BY TMSIS_PASSTHROUGH;
 
+/* call program to calculate fed assigned service catg */
+%fasc_code(fl=rx);
+
 %DROP_temp_tables(&FL._LINE);
 
+   title ;
    EXECUTE(
     INSERT INTO &DA_SCHEMA..TAF_&FL.H	
-	SELECT * 
-	FROM &FL.H
-   ) BY TMSIS_PASSTHROUGH;
+		SELECT h.* 
+			   ,fasc.fed_srvc_ctgry_cd
+
+		FROM &FL.H h
+		
+			 left join
+			 &fl._hdr_rolled fasc
+
+		ON   h.&fl._link_key=fasc.&fl._link_key
+	
+		) BY TMSIS_PASSTHROUGH;
 
    	select ht_ct into : HEADER_CT
 	from (select * from connection to tmsis_passthrough

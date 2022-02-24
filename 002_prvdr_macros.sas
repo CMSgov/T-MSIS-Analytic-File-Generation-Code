@@ -64,13 +64,13 @@ nullif(trim(upper(&textst)),'')
            diststyle even
            compound sortkey(tms_run_id, submitting_state) as
       select &&&collist
-      from  &intbl
-      where tms_is_active=1
-		and tms_reporting_period is not null
-		and tot_rec_cnt > 0
-		and trim(submitting_state) not in ('94','96')
+      from  (select *, submitting_state as submtg_state_cd from &intbl
+		      where tms_is_active=1
+				and tms_reporting_period is not null
+				and tot_rec_cnt > 0
+				and trim(submitting_state) not in ('94','96'))
 	    %if %sysfunc(FIND(&ST_FILTER,%str(ALL))) = 0 %then %do;
-        and &ST_FILTER
+        where &ST_FILTER
 	    %end;
       order by tms_run_id, submitting_state;
 %mend copy_activerows_nts;
@@ -191,3 +191,152 @@ select submitting_state, count(*) as &cntvar
     %let kvar = %scan(&keylist, &k);
   %end;
 %mend write_keyprefix;
+
+%macro nppes_tax(TMSIS_SCHEMA, id_intbl, tax_intbl, tax_outtbl);
+  
+** get NPPES taxonomy codes using NPI from PRV identifier segment;
+
+  execute(
+    create table #nppes_id1
+	  distkey(prvdr_id) sortkey(prvdr_id) as
+      select submtg_state_cd, submtg_state_cd as submitting_state, tmsis_run_id as tms_run_id, submtg_state_prvdr_id as submitting_state_prov_id, prvdr_id 
+	  from &id_intbl. where prvdr_id_type_cd='2'
+	  group by submtg_state_cd, tmsis_run_id, submtg_state_prvdr_id, prvdr_id
+      order by prvdr_id;
+  ) by tmsis_passthrough;
+  
+  %*drop_temp_tables(&id_intbl.);
+
+** create a table with fewer columns for the initial record pull from NPPES table;
+
+  execute(
+    create table #nppes_id2
+	  distkey(prvdr_id) as
+      select prvdr_id
+	  from #nppes_id1
+	  group by prvdr_id
+      order by prvdr_id;
+  ) by tmsis_passthrough;
+
+
+** link on NPI in NPPES set flags to identify primary taxonomy codes that should be included in the TAF classification segment;
+
+	execute (
+	create table #nppes_tax_flags as
+	select  nppes.*, t2.prvdr_id
+			,%do i=1 %to 14;
+				nvl(nppes.hc_prvdr_prmry_txnmy_sw_&i.,' ')||
+			%end;
+				nvl(nppes.hc_prvdr_prmry_txnmy_sw_15,' ')
+				as sw_positions
+			,regexp_count(sw_positions,'Y') as taxo_switches
+			,%do i=1 %to 14;
+				nvl(substring(nppes.hc_prvdr_txnmy_cd_&i.,10,1),' ')||
+			%end;
+				nvl(substring(nppes.hc_prvdr_txnmy_cd_15,10,1),' ')
+				as cd_positions
+			,regexp_count(cd_positions,'X') as taxo_cnt
+	from #nppes_id2 t2 left join &tmsis_schema..data_anltcs_prvdr_npi_data_vw nppes on t2.prvdr_id=cast(nppes.prvdr_npi as varchar)
+	) by tmsis_passthrough;
+
+  %drop_temp_tables(#nppes_id2);
+
+** create #NPPES_tax0 and #NPPES_tax0b to save array contents as separate records;
+
+  execute (
+	create table #nppes_tax0 (
+	    prvdr_npi integer,
+		prvdr_id_chr varchar(12),
+		prvdr_clsfctn_cd varchar(12)
+	);
+  ) by tmsis_passthrough;
+
+  execute (
+	create table #nppes_tax0b (
+	    prvdr_npi integer,
+		prvdr_id_chr varchar(12),
+		prvdr_clsfctn_cd varchar(12)
+	);
+  ) by tmsis_passthrough;
+
+** insert one NPPES taxonomy array element into #NPPES_tax0 - create separate records so that distinct values can to be inserted as rows into TAF taxonomy segment;
+
+	execute (
+	insert into #nppes_tax0
+		   (prvdr_npi, prvdr_id_chr, prvdr_clsfctn_cd) 
+	select distinct prvdr_npi, prvdr_id
+		   ,case
+			%do i=1 %to 15;
+				 when taxo_switches = 1 and position('Y' in sw_positions)=&i. then nvl(hc_prvdr_txnmy_cd_&i.,' ')
+			%end;
+			%do i=1 %to 15;
+				 when taxo_switches = 0 and taxo_cnt = 1 and position('X' in cd_positions)=&i. then nvl(hc_prvdr_txnmy_cd_&i.,' ')
+			%end;
+				 else null
+			end as selected_txnmy_cd
+	from #nppes_tax_flags
+	where taxo_switches = 1 or (taxo_switches = 0 and taxo_cnt = 1)
+	) by tmsis_passthrough;
+	
+** insert all primary NPPES taxonomy codes into #NPPES_tax0b if more than one - note the current NPPES table has no records with more than one primary taxonomy code;
+
+  execute (
+
+	%do a=1 %to 15;
+		insert into #nppes_tax0b
+		   (prvdr_npi, prvdr_id_chr, prvdr_clsfctn_cd) 
+		   select prvdr_npi, prvdr_id, hc_prvdr_txnmy_cd_&a.
+				from #nppes_tax_flags
+				where taxo_switches > 1 and nvl(hc_prvdr_txnmy_cd_&a.,' ') <> ' ' and hc_prvdr_prmry_txnmy_sw_&a.='Y';
+	%end;
+
+  ) by tmsis_passthrough;
+ 
+  %drop_temp_tables(#nppes_tax_flags);
+  
+** add multiple NPPES primary taxonomy codes for any NPI to single NPPES primary taxonomy codes for NPIs;
+
+  execute (
+
+    create table #nppes_tax1
+	  distkey(prvdr_id_chr) sortkey(prvdr_id_chr) as
+      (select prvdr_npi, prvdr_id_chr, prvdr_clsfctn_cd
+	  from #nppes_tax0)
+	  union
+	  (select prvdr_npi, prvdr_id_chr, prvdr_clsfctn_cd
+	  from #nppes_tax0b)
+      order by prvdr_npi;
+
+  ) by tmsis_passthrough;
+
+  %drop_temp_tables(#nppes_tax0);
+  %drop_temp_tables(#nppes_tax0b);
+
+** link primary taxonomy codes (identified as prvdr_clsfctn_cd and prvdr_clsfctn_type_cd='N') to #nppes_id1 for additional provider and state identifiers required in the TAF;
+
+	execute (
+	create table #nppes_tax_final as
+	select distinct i.tms_run_id, i.submtg_state_cd, i.submitting_state, i.submitting_state_prov_id, 'N' as prvdr_clsfctn_type_cd, n.prvdr_clsfctn_cd
+            from #nppes_id1 i left join #NPPES_tax1 n 
+			on i.prvdr_id=n.prvdr_id_chr
+			where n.prvdr_npi is not null
+			order by 5) by tmsis_passthrough;
+
+  %drop_temp_tables(#nppes_id1);
+  %drop_temp_tables(#NPPES_tax1);
+  
+** add NPPES primary taxonomy codes to taxonomy codes submitted by the state for T-MSIS;
+
+  execute(
+    create table &tax_outtbl. as
+	  (select tms_run_id, submtg_state_cd, submitting_state, submitting_state_prov_id, prvdr_clsfctn_type_cd, prvdr_clsfctn_cd
+	  from &tax_intbl.)
+	  union
+      (select tms_run_id, submtg_state_cd, submitting_state, submitting_state_prov_id, prvdr_clsfctn_type_cd, prvdr_clsfctn_cd
+	  from #nppes_tax_final)
+      order by &srtlist;
+  ) by tmsis_passthrough;
+
+  %drop_temp_tables(#nppes_tax_final);
+  
+%mend nppes_tax;

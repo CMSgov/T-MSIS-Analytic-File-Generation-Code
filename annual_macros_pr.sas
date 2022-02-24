@@ -104,10 +104,11 @@
 		select a.&file._fil_dt
 		       ,b.submtg_state_cd
 			   ,max(b.da_run_id) as da_run_id
+			   ,b.fil_cret_dt
 
 		from job_cntl_parms_both_&file._&inyear. a
 		     inner join
-			 (select da_run_id, incldd_state_cd as submtg_state_cd 
+			 (select da_run_id, incldd_state_cd as submtg_state_cd, fil_cret_dt  
               from &DA_SCHEMA..efts_fil_meta where incldd_state_cd != 'Missing' ) b
 
 		on a.da_run_id = b.da_run_id
@@ -118,6 +119,7 @@
 
 		group by a.&file._fil_dt
 		        ,b.submtg_state_cd
+				,b.fil_cret_dt
 
 	) by tmsis_passthrough;
 
@@ -125,12 +127,15 @@
 	   that go into each annual &fil_typ. file */
 
 	execute (
-		insert into &DA_SCHEMA..TAF_ANN_&fil_typ._INP_SRC
+		insert into &da_schema..taf_ann_inp_src
 		select
-			&DA_RUN_ID. as ANN_DA_RUN_ID,
-			SUBMTG_STATE_CD,
-			&file._FIL_DT,
-			DA_RUN_ID as SRC_DA_RUN_ID
+			&da_run_id. as ann_da_run_id,
+			'apr' as ann_fil_type, 
+			submtg_state_cd,
+			%nrbquote(lower('&file.')) as src_fil_type,
+			&file._fil_dt as src_fil_dt,
+			da_run_id as src_da_run_id,
+			fil_cret_dt as src_fil_creat_dt
 
 		from max_run_id_&file._&inyear.
 	) by tmsis_passthrough; 

@@ -17,17 +17,12 @@
 /*				IP_Freqlists.sas --> contains list of variables to produce freqs for in QA    */
 /*																							  */
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
 *********************************************************************
 *     QSSI PROVIDED MACROS FOR ENVIRONMENT                          *                           
 *     TMSIS_SCHEMA - OPERATIONAL_SCHEMA                             *       
 *     DA_SCHEMA - DATA_ANALYTICS_SCHEMA                             *
 *********************************************************************;
+*options mprint source2;
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
 %include &tms_config_macro;
@@ -59,7 +54,9 @@
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Shared_Macros.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Grouper_Macro.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/ip/programs/AWS_IP_Macros.sas";
+%INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/Fasc.sas";
 
+libname tempdata "/sasdata/users/&sysuserid/&tmsis./Deo/temp";
 ********************************************************************
 * GLOBAL MACROS AND LOCAL MACROS                                   *
 ********************************************************************;
@@ -137,13 +134,16 @@ proc sql;
 	%AWS_MAXID_pull (&TMSIS_SCHEMA., TMSIS_FIL_PRCSG_JOB_CNTL); /* PULLS MAX RUN IDS FROM FILE HEADER - 01 SEGMENT*/
     sysecho 'in claims family';
 	%AWS_Claims_Family_Table_Link (&TMSIS_SCHEMA., CIP00002, TMSIS_CLH_REC_&fl, &fl, DSCHRG_DT);   /* IP: a.DSCHRG_DT, LT: a.SERVICE_END_DT, RX: a.FILL_DT, OT: a.SERVICE_END_DT */
+	sysecho 'in process_nppes';
+	%process_nppes();						
+	sysecho 'in process ccs';	
+    %process_ccs(); 	
     sysecho 'in extract line';
 	%AWS_Extract_Line_IP (&TMSIS_SCHEMA., &fl,&fl,CIP00003, TMSIS_CLL_REC_&fl, DSCHRG_DT);
     sysecho 'in assign grouper data';  
 	%AWS_ASSIGN_GROUPER_DATA_CONV(filetyp=&fl, clm_tbl=&fl._HEADER, line_tbl=&fl._LINE, analysis_date=DSCHRG_DT,MDC=YES,IAP=YES,PHC=YES,MH_SUD=YES,TAXONOMY=YES); 
 	sysecho 'in build ip';	
     %BUILD_IP();	
-
  	sysecho 'in jobcntl updt2';
 	%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.);
 	%let TABLE_NAME = TAF_IPH;

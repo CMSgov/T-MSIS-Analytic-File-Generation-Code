@@ -41,6 +41,16 @@
 /*							-MACTAF-1706: Add codes '2C,18A5'  to xix_srvc_ctgry_cd							*/
 /*							-MACTAF-1708: Mod macro var_set_poa to include code '1'							*/
 /*							-MACTAF-1719: Hard code exclusion of MT TPA (state code 94) from TAF            */
+/* 				11/08/2021- DB modified to add FASC to TAF                                                  */
+/* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
+/*			    12/06/2021- DB modified as follows                                                          */
+/*							-MACTAF-1866: Add valid values to xxi_srvc_ctgry_cd								*/
+/*							-MACTAF-1859: 																	*/
+/*							-MACTAF-1858: Add value 101200000X to xx_MH_TXNMY_IND source (in grouper)		*/
+/*							-MACTAF-1755: Add value 147 to tos list											*/
+/*							-MACTAF-1803: Add CCS category: prcdr_ccs_ctgry_cd to claim line				*/
+/*							-MACTAF-1802: Add CCS category: dgns_1_ccsr_dflt_ctgry_cd to claim headers		*/ 
+/*							-MACTAF-1801: MOD macro %var_set_type6 to account for 7th exception 			*/
 /************************************************************************************************************/
 
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
@@ -886,8 +896,6 @@ where &TAF_FILE_DATE >= cast(tmsis_cutovr_dt as integer)
 				  %end;
 	   
 %mend var_set_type3;
-
-
 %macro var_set_type4 (var, upper, cond1=@, cond2=@, cond3=@, cond4=@, cond5=@, cond6=@, cond7=@, cond8=@, cond9=@, cond10=@);
 
  case when %if &upper=YES %then %do;
@@ -931,7 +939,8 @@ end
 	 end as &var
 	 %end;
 %mend var_set_type5;
-%macro var_set_type6 (var, cond1=@, cond2=@, cond3=@, cond4=@, cond5=@, cond6=@, new=NO);
+
+%macro var_set_type6 (var, cond1=@, cond2=@, cond3=@, cond4=@, cond5=@, cond6=@, cond7=@, new=NO);
 
  case when &var in (&cond1
  	   %if "&cond2" ne "@" %then %do; , &cond2 %end; %else %goto skip6;
@@ -939,6 +948,7 @@ end
 	   %if "&cond4" ne "@" %then %do; , &cond4 %end; %else %goto skip6;
  	   %if "&cond5" ne "@" %then %do; , &cond5 %end; %else %goto skip6;
 	   %if "&cond6" ne "@" %then %do; , &cond6 %end; %else %goto skip6;
+	   %if "&cond7" ne "@" %then %do; , &cond7 %end; %else %goto skip6;
 	   %skip6:
 	   ) then NULL
 	   else &var
@@ -980,7 +990,7 @@ case when lpad(&var,2,'0') in('01','02','03','04','05','06','07','08','09',
 
 case when regexp_count(lpad(&var,3,'0'),'[0-9]{3}') > 0 then 
 	 case when ((&var::smallint >= 1 and &var::smallint <= 93) or
-			    (&var::smallint in (115,119,120,121,122,123,127,131,134,135,136,137,138,139,140,141,142,143,144,145,146))) 
+			    (&var::smallint in (115,119,120,121,122,123,127,131,134,135,136,137,138,139,140,141,142,143,144,145,146,147))) 
 		  then lpad(&var,3,'0')
 	 end
 	 else NULL
@@ -1107,6 +1117,45 @@ end  as &var
 	   
 %mend var_set_taxo;
 
+%macro crosstab(ds,cols,wherestmt=,outfile=,schema=);
+
+	%if &outfile. ne  %then %do; create table &outfile. as %end;
+	select * from connection to tmsis_passthrough (
+
+		select %do i=1 %to %sysfunc(countw(&cols.));
+				    %let col=%scan(&cols.,&i.);
+					&col.,
+                  %end;
+				  count,
+			   100*(a.count / b.totcount ) as pct
+				
+
+		from (select %do i=1 %to %sysfunc(countw(&cols.));
+				    	%let col=%scan(&cols.,&i.);
+			         	%if &i. > 1 %then %do; , %end; &col.
+                  	 %end;
+                     ,count(*) as count
+					 ,max(1) as dummy
+
+              from &ds. &wherestmt.
+              group by %do i=1 %to %sysfunc(countw(&cols.));
+				    	   %let col=%scan(&cols.,&i.);
+			         	   %if &i. > 1 %then %do; , %end; &col.
+                       %end;) a
+
+		      inner join
+
+			 (select count(*) as totcount, 1 as dummy from &ds. &wherestmt.) b
+
+			 on a.dummy = b.dummy
+
+		order by %do i=1 %to %sysfunc(countw(&cols.));
+				    %let col=%scan(&cols.,&i.);
+			         %if &i. > 1 %then %do; , %end; &col.
+                  %end; );
+
+%mend crosstab;
+
 %macro fix_old_dates(date_var);
 
    case when date_cmp(&date_var,'1600-01-01')=-1 then '1599-12-31'::date else &date_var end as &date_var
@@ -1203,6 +1252,7 @@ end  as &var
 	'0044',
 	'0045',   /* added to set 6/9/2020 */
 	'0046',	  /* added to set 3/4/2021 */ 
+	'0047',	  /* added to set 12/6/2021*/
 	'46A1',   /* added to set 3/4/2021 */   
 	'46A2',   /* added to set 3/4/2021 */   
 	'46A3',   /* added to set 3/4/2021 */   
@@ -1254,10 +1304,224 @@ end  as &var
 	'35B',
 	'048',
 	'049',
-	'050');
+	'050',
+	'02A',	  /* Added to set 12/6/2021 */	
+	'03A',	  /* Added to set 12/6/2021 */
+	'03B',	  /* Added to set 12/6/2021 */	
+	'8A2',	  /* Added to set 12/6/2021 */
+	'8A3',	  /* Added to set 12/6/2021 */
+	'8A4',	  /* Added to set 12/6/2021 */
+	'8A5',	  /* Added to set 12/6/2021 */
+	'8A6',	  /* Added to set 12/6/2021 */
+	'21A',	  /* Added to set 12/6/2021 */
+	'026'	  /* Added to set 12/6/2021 */
+	);
+
+/********************************************************************************/
+/* DB added 11/08/2021 the following macros for use in coding FED_SRVC_CTGRY_CD */
+/********************************************************************************/
+%let vs_IP_Taxo ='282N00000X','282NC2000X','282NC0060X','282NR1301X','282NW0100X','286500000X','2865M2000X',
+			      '2865X1600X','282J00000X','284300000X','273100000X';
+%let vs_NF_Taxo ='311500000X','313M00000X','314000000X','3140N1450X','275N00000X';
+%let vs_ICF_Taxo='315P00000X','310500000X';
+%let vs_Othr_Res_Taxo='385H00000X','385HR2050X','385HR2055X','385HR2060X','385HR2065X','320900000X','320800000X',
+				'323P00000X','322D00000X','320600000X','320700000X','324500000X','3245S0500X','281P00000X',
+				'281PC2000X','282E00000X','283Q00000X','283X00000X','283XC2000X','273R00000X','273Y00000X',
+				'276400000X','310400000X','3104A0625X','3104A0630X','311Z00000X','311ZA0620X';
+%let vs_Othr_HCBS_Proc_cd='T1019','T1020','S5125','S5126','T0005','T1028','S5100','S5101','S5102','S5105','S5120','S5121',
+				'S5130','S5131','S5135','S5136','S5150','S5151','S5170';
+%let vs_Othr_HCBS_Taxo='04050','04060','06010','07010','08030','08040','08050','08060','09012';
+%let vs_HH_Proc_cd='99503','99504','99505','99506','99507','99509','99511','99512','99600','99601','99602','G0068',
+				'G0069','G0070','G0088','G0089','G0090','G0151','G0152','G0153','G0154','G0155','G0156','G0157',
+				'G0158','G0159','G0160','G0161','G0162','G0163','G0164','G0299','G0300','G0490','G0493','G0494',
+				'G0495','G0496','S5108','S5109','S5110','S5111','S5115','S5116','S5180','S5181','S5522','S5523',
+				'S9097','S9098','S9122','S9123','S9124','S9127','S9128','S9129','S9131','S9474','T1000','T1001',
+				'T1002','T1003','T1004','T1021','T1022','T1030','T1031','T1502','T1503';
+%let vs_HH_Rev_cd='0023','056', '056 ','0560','0561','0562','0563','0564','0565','0566','0567','0568','0569',
+				'057', '057 ','0570','0571','0572','0573','0574','0575','0576','0577','0578','0579',
+				'058', '058 ','0580','0581','0582','0583','0584','0585','0586','0587','0588','0589',
+				'059', '059 ','0590','0591','0592','0593','0594','0595','0596','0597','0598','0599';
+%let vs_Rad_CCS_Cat='177','178','179','180','181','182','183','184','185','186','187','189','190','191',
+				'192','193','194','195','196','197','198','207','208','209','210','226';
+%let vs_Lab_CCS_Cat='205','206','233','234','235';
+%let vs_DME_CCS_Cat='241','242','243';
+%let vs_transp_CCS_Cat='239';
+%let code_list=%str(&vs_Lab_CCS_Cat.,&vs_Rad_CCS_Cat.,&vs_DME_CCS_Cat.,&vs_transp_CCS_Cat.);
+
+%macro chk_inval_msis_id;
+  orig_msis_ident_num is null or
+  orig_msis_ident_num='&' or
+  rlike(orig_msis_ident_num ,'([A-Za-z1-9])') =0 or /**0-fill*/
+  rlike(orig_msis_ident_num ,'([A-Za-z0-8])') =0 or /**9-fill*/
+  rlike(orig_msis_ident_num ,'([A-Za-z0-7]|9)') =0  /**8-fill*/
+  
+%mend;
+
+%macro misslogic(var, length);     
+     ( &var. like %tslit(8{&length.}) or
+         &var. like %tslit(9{&length.}) or
+         &var. like %tslit(0{&length.}) or
+       &var. !~ '[(a-z)|(A-Z)|(0-9)]' or 
+	     &var.='&' or
+         &var. is null
+        )     
+%mend misslogic;
 
 
+%macro process_nppes ();
+*NPPES DATA PROCESSING;
 
+	execute (
+	create temp table taxo_switches
+	distkey (prvdr_npi) 
+	sortkey (prvdr_npi)
+	as
+	select  prvdr_npi
+			,%do i=1 %to 14;
+			    concat(nvl(hc_prvdr_prmry_txnmy_sw_&i,' ')::char, 
+		     %end;
+			 	       nvl(hc_prvdr_prmry_txnmy_sw_15,' ')::char))))))))))))))
+				as sw_positions
 
+			,regexp_count(sw_positions,'Y') as taxo_switches
 
+			%do i=1 %to 15;
+			,case when hc_prvdr_txnmy_cd_&i. is not null and
+				       hc_prvdr_txnmy_cd_&i. <> ' ' then 'X' else ' ' end as taxopos&i
+			%end;
+
+			,%do i=1 %to 14;
+			    concat(taxopos&i, 
+		     %end;
+			 	taxopos15))))))))))))))
+				as cd_positions
+
+			,regexp_count(cd_positions,'X') as taxo_cds
+
+			%do i=1 %to 15;
+			,case when hc_prvdr_txnmy_cd_&i. is not null and
+				       hc_prvdr_txnmy_cd_&i. <> ' ' then &i else null end as taxo&i
+			%end;
+
+	from &tmsis_schema..data_anltcs_prvdr_npi_data_vw
+	) by tmsis_passthrough;
+
+	/*
+	%crosstab(taxo_switches, sw_positions taxo_switches)
+	%crosstab(taxo_switches, cd_positions taxo_cds)
+	%crosstab(taxo_switches, taxo_switches taxo_cds)
+	*/
+
+	execute (
+	create temp table nppes_npi_step2
+	distkey (prvdr_npi) 
+	sortkey (prvdr_npi)
+ 	as
+	select a.prvdr_npi
+		   ,taxo_switches
+		   ,sw_positions
+		   ,taxo_cds
+		   ,cd_positions
+		   ,position('Y' in sw_positions) as primary_switch_position
+		   ,case when taxo_switches = 1 then 
+				 	subarray(array(%do i=1 %to 14;
+									nvl(hc_prvdr_txnmy_cd_&i.,' '),
+									%end;
+									nvl(hc_prvdr_txnmy_cd_15,' ')),position('Y' in sw_positions)-1,1)
+				 when taxo_switches = 0 and taxo_cds = 1 then 
+				 	subarray(array(%do i=1 %to 14;
+									nvl(hc_prvdr_txnmy_cd_&i.,' '),
+									%end;
+									nvl(hc_prvdr_txnmy_cd_15,' ')),position('X' in cd_positions)-1,1)
+				 when taxo_switches = 0 and taxo_cds > 1 then null
+				 when taxo_switches > 1 then
+				 	subarray(array(%do i=1 %to 14;
+									nvl(hc_prvdr_txnmy_cd_&i.,' '),
+									%end;
+									nvl(hc_prvdr_txnmy_cd_15,' ')),least(%do j=1 %to 14;
+																		 taxo&j,
+																		 %end; taxo15)-1,1)
+				 else null
+			 end as selected_txnmy_cdx
+		%do i=1 %to 15;
+		   ,hc_prvdr_txnmy_cd_&i.
+		%end;
+		%do i=1 %to 15;
+		   ,taxo&i.
+		%end;
+
+	from   &tmsis_schema..data_anltcs_prvdr_npi_data_vw a
+		   inner join
+		   taxo_switches b
+	on	   a.prvdr_npi=b.prvdr_npi
+	where  b.taxo_cds>0
+	) by tmsis_passthrough;
+
+/* Shinu's code */
+	execute (
+	create temp table nppes_npi
+	distkey (prvdr_npi) 
+	sortkey (prvdr_npi)
+	as
+		select *        
+        from (
+		select cast(prvdr_npi as varchar(10)) as prvdr_npi
+
+			   ,case when selected_txnmy_cdx is null then null
+					 else substring(json_serialize(selected_txnmy_cdx),3,10) 
+					 end as selected_txnmy_cd
+
+			   ,case when selected_txnmy_cd in (&vs_ICF_Taxo.)
+				     then 1 else 0 end as prvdr_txnmy_icf
+
+			   ,case when selected_txnmy_cd in (&vs_NF_Taxo.)
+			         then 1 else 0 end as prvdr_txnmy_nf
+
+			   ,case when selected_txnmy_cd in (&vs_Othr_Res_Taxo.)
+				     then 1 else 0 end as prvdr_txnmy_othr_res
+
+			   ,case when selected_txnmy_cd in (&vs_IP_Taxo.)
+			         then 1 else 0 end as prvdr_txnmy_IP
+		       	      
+		from   nppes_npi_step2
+		) a 		
+
+	) by tmsis_passthrough ;
+
+%DROP_temp_tables(taxo_switches);
+%DROP_temp_tables(nppes_npi_step2);
+
+%mend process_nppes;
+
+%macro process_ccs();
+
+	execute (
+	create temp table ccs_proc
+	distkey (cd_rng) 
+	sortkey (cd_rng)
+	as
+	select  cd_rng
+			,ccs
+			,case when ccs in (&vs_Lab_CCS_Cat.) then 'Lab       '
+				  when ccs in (&vs_Rad_CCS_Cat.) then 'Rad       '
+    			  when ccs in (&vs_DME_CCS_Cat.) then 'DME       '
+				  when ccs in (&vs_transp_CCS_Cat.) then 'Transprt  '
+				  else null
+			  end as code_cat
+	from &da_schema..ccs_srvcs_prcdr_rfrnc
+	) by tmsis_passthrough;
+
+	execute (
+	create temp table ccs_dx
+	distkey (icd_10_cm_cd) 
+	sortkey (icd_10_cm_cd)
+	as
+	select  icd_10_cm_cd
+			,dflt_ccsr_ctgry_ip
+			,dflt_ccsr_ctgry_ip as dflt_ccsr_ctgry_lt
+			,dflt_ccsr_ctgry_op as dflt_ccsr_ctgry_ot
+	from &da_schema..dxccsr_rfrnc
+	) by tmsis_passthrough;
+
+%mend process_ccs;
 

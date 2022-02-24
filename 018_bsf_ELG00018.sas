@@ -6,17 +6,14 @@
 /*Mod:  
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
 
 %macro create_ELG00018(tab_no, _2x_segment, eff_date, end_date);
-%let created_vars = 
-   case when SECT_1115A_DEMO_IND = '1' then 1 else 0 end as _1115A_PARTICIPANT_FLG
-;
+
+   /* de "retired" from TAF in 2021Q4 CCB */
+   /*   case when SECT_1115A_DEMO_IND = '1' then 1 else 0 end as _1115A_PARTICIPANT_FLG
+   */
+%let created_vars = null as _1115A_PARTICIPANT_FLG;
+
 execute (
      /* Create temp table to determine which beneficiaries have multiple records */
      create temp table &tab_no._recCt 
@@ -42,7 +39,7 @@ select * from connection to tmsis_passthrough
 	 sortkey(submtg_state_cd,msis_ident_num) as
 	 select t1.*,
 
-         &created_vars,
+	 	 &created_vars,
 
 		 1 as KEEP_FLAG
 

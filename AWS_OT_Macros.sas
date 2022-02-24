@@ -19,6 +19,11 @@
 /*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
 /*							-MACTAF-1583: Recode Tot_bill_amt value 9999999999.99 to Null                   */
 /*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
+/* 				11/08/2021- DB modified to add FASC to TAF                                                  */
+/* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
+/*				12/06/2021- DB modified to add variable dgns_1_ccsr_dflt_ctgry_cd							*/
+/*							-MACTAF-1802: Add default CCSR dx cat(ip lt ot) for primary dx code				*/
+/*							-MACTAF-1803: Add CCS category for CPT/HCPCS codes to ot claim lines			*/
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 
@@ -47,9 +52,9 @@ execute (
 
 	execute (
 
-		create temp table &FL2._LINE
+		create temp table &FL2._LINE_PRE_NPPES
 		distkey (ORGNL_CLM_NUM_LINE) 
-		sortkey (NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND)
+		sortkey (PRSCRBNG_PRVDR_NPI_NUM)
 
 		as
 
@@ -69,6 +74,30 @@ execute (
 
 	) by tmsis_passthrough;
 
+	/* Join line file with NPPES to pick up servicing provider nppes taxonomy code */
+	execute (
+
+		create temp table &FL2._LINE
+		distkey (ORGNL_CLM_NUM_LINE) 
+		sortkey (NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND)
+
+		as
+
+		select  A.*
+ 		 		,%var_set_taxo(SELECTED_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY, NEW=SRVCNG_PRVDR_NPPES_TXNMY_CD)
+				,ccs.ccs as prcdr_ccs_ctgry_cd
+
+		from	&FL2._LINE_PRE_NPPES as A
+			    left join
+			    nppes_npi nppes
+		on nppes.prvdr_npi=a.PRSCRBNG_PRVDR_NPI_NUM  	/* misnomer on OT input */
+
+				left join
+				ccs_proc ccs
+		on ccs.cd_rng=a.prcdr_cd
+
+	) by tmsis_passthrough;
 
 	execute (
 
@@ -272,6 +301,9 @@ execute (
 	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_UPDT_TS 
 	,%fix_old_dates(SRVC_ENDG_DT_DRVD)
 	,%var_set_type2(SRVC_ENDG_DT_CD,0,cond1=1,cond2=2,cond3=3,cond4=4,cond5=5)
+	,%var_set_taxo(BLG_PRVDR_NPPES_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY)
+	,DGNS_1_CCSR_DFLT_CTGRY_CD
 
 	from 	(select *,
      case when ADJSTMT_IND is NOT NULL and    
@@ -360,6 +392,9 @@ execute (
 	,%var_set_type4(UOM_CD,YES,cond1=F2,cond2=ML,cond3=GR,cond4=UN,cond5=ME)
     ,%var_set_type6(NDC_QTY, cond1=999999, cond2=999999.998, cond3=888888.000, cond4=888888.880, cond5=88888.888, cond6=888888.888)
 	,RN as LINE_NUM
+	,PRCDR_CCS_CTGRY_CD
+    ,%var_set_taxo(SRVCNG_PRVDR_NPPES_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY)
 
 		FROM 	(select *,
      			 case when LINE_ADJSTMT_IND is NOT NULL and    
@@ -369,13 +404,26 @@ execute (
 
 	) by tmsis_passthrough;
 
+
+	/* call program to calculate fed assigned service catg */
+	%fasc_code(fl=ot);
+
 	%drop_temp_tables(&fl._LINE);
 
+   title ;
    EXECUTE(
     INSERT INTO &DA_SCHEMA..TAF_&FL.H	
-	SELECT * 
-	FROM &FL.H
-   ) BY TMSIS_PASSTHROUGH;
+		SELECT h.* 
+			   ,fasc.fed_srvc_ctgry_cd 
+
+		FROM &FL.H h
+		
+			 left join
+			 &fl._hdr_rolled fasc
+
+		ON   h.&fl._link_key=fasc.&fl._link_key
+		
+		) BY TMSIS_PASSTHROUGH;
 
    	select ht_ct into : header_ct_&STATE_ID
 	from (select * from connection to tmsis_passthrough
@@ -446,6 +494,8 @@ execute (
 		,UOM_CD
     	,NDC_QTY
 		,LINE_NUM
+		,PRCDR_CCS_CTGRY_CD
+    	,SRVCNG_PRVDR_NPPES_TXNMY_CD
 		)	
 	SELECT * 
 	FROM &FL.L
@@ -626,7 +676,6 @@ execute (
   end  as SRVC_ENDG_DT_CD_H
 
 %mend COT00002;
-
 
 *********************************************************************
 *pull only the required data elements from each segment				*

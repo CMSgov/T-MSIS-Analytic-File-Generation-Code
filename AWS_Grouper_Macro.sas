@@ -39,7 +39,8 @@
 '320900000X', '3104A0630X', '3104A0625X', '310500000X', '311500000X', '315P00000X',
 '320800000X', '320900000X', '322D00000X', '323P00000X', '363LP0808X', '364SP0807X',
 '364SP0808X', '364SP0809X', '364SP0810X', '364SP0811X', '364SP0812X', '364SP0813X',
-'385HR2055X', '385HR2060X'
+'385HR2055X', '385HR2060X',
+'101200000X'
 %mend otmtax;
 
 %macro otstax;
@@ -52,12 +53,15 @@
 %macro AWS_ASSIGN_GROUPER_DATA_CONV(filetyp=, clm_tbl=, line_tbl=,analysis_date=,MDC=YES,IAP=YES,PHC=YES,MH_SUD=YES,TAXONOMY=YES); 
 	%let filetype=%UPCASE(%unquote(%nrbquote('&filetyp'))); /* Put quotes around filetyp to avoid issues with "LT" */
 
+
  EXECUTE (
    CREATE TEMP TABLE &clm_tbl._STEP1 
 	distkey (ORGNL_CLM_NUM) 
 	sortkey(NEW_SUBMTG_STATE_CD,ORGNL_CLM_NUM,ADJSTMT_CLM_NUM,ADJDCTN_DT,ADJSTMT_IND) as
 
 	select a.*
+		   ,ccs_dx.dflt_ccsr_ctgry_&filetyp.::varchar(6) as dgns_1_ccsr_dflt_ctgry_cd
+
 	%if %upcase(&MDC)=YES %then %do;										
 
 	/* code Major Diagnostic Indicator */
@@ -115,12 +119,16 @@
     %do;
  		 	,%var_set_taxo(BLG_PRVDR_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
 									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY, NEW=TEMP_TAXONMY)
-            , case when TEMP_TAXONMY is NULL then null 
-                   when TEMP_TAXONMY in (%otmtax) then 1  
+ 		 	,%var_set_taxo(SELECTED_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY, NEW=BLG_PRVDR_NPPES_TXNMY_CD)
+            , case when TEMP_TAXONMY is NULL and BLG_PRVDR_NPPES_TXNMY_CD is NULL then null 
+                   when TEMP_TAXONMY in (%otmtax) or
+					    BLG_PRVDR_NPPES_TXNMY_CD in (%otmtax) then 1  
 				   else 0
 			  end  as &filetyp._MH_TAXONOMY_IND_HDR
-			, case when TEMP_TAXONMY is NULL then null         
-				   when TEMP_TAXONMY in (%otstax) then 1   
+			, case when TEMP_TAXONMY is NULL and BLG_PRVDR_NPPES_TXNMY_CD is NULL then null         
+				   when TEMP_TAXONMY in (%otstax) or
+						BLG_PRVDR_NPPES_TXNMY_CD in (%otstax) then 1   
                    else 0
 			  end  as &filetyp._SUD_TAXONOMY_IND_HDR
 
@@ -128,6 +136,12 @@
 	%end;
 
 	from &clm_tbl a
+
+	/** Join NPPES table */
+	left join nppes_npi nppes on nppes.prvdr_npi=a.BLG_PRVDR_NPI_NUM 
+ 
+	/** Join CCS DX table */
+	left join ccs_dx ccs_dx on ccs_dx.icd_10_cm_cd=a.DGNS_1_CD   
 
 	/** Join MDC tables **/
 	%if %upcase(&MDC)=YES %then %do;
@@ -208,7 +222,6 @@
 
 	) by tmsis_passthrough;
 
-
 %DROP_temp_tables(&clm_tbl);
 
 %if %UPCASE(&TAXONOMY)=YES %then 
@@ -223,22 +236,40 @@
 	select NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND
 
 
-			,max(case when TEMP_TAXONMY_LINE is null then null 
-                      when TEMP_TAXONMY_LINE in (%otmtax) then 1			      
-                      else 0 end) as &filetyp._MH_TAXONOMY_IND_LINE
+			,max(case 
+				  when TEMP_TAXONMY_LINE is null 
+				  	%if &filetyp. = OT %then %do;
+					   and SRVCNG_PRVDR_NPPES_TXNMY_CD is null 
+					%end; 
+					   then null 
+                  when TEMP_TAXONMY_LINE in (%otmtax) 
+					%if &filetyp. = OT %then %do;
+					   or SRVCNG_PRVDR_NPPES_TXNMY_CD in (%otmtax) 
+					%end; 
+					   then 1			      
+                  else 0 end) as &filetyp._MH_TAXONOMY_IND_LINE
 
 			,max(case 
-			      when TEMP_TAXONMY_LINE is null then null
-                  when TEMP_TAXONMY_LINE in (%otstax) then 1
+			      when TEMP_TAXONMY_LINE is null 
+				  	%if &filetyp. = OT %then %do;
+					   and SRVCNG_PRVDR_NPPES_TXNMY_CD is null 
+					%end;
+					   then null
+                  when TEMP_TAXONMY_LINE in (%otstax) 
+				  	%if &filetyp. = OT %then %do;
+					or SRVCNG_PRVDR_NPPES_TXNMY_CD in (%otstax) 
+				 	%end;
+					   then 1
                   else 0 end) as &filetyp._SUD_TAXONOMY_IND_LINE
 	from (select *
             	,%var_set_taxo(srvcng_prvdr_txnmy_cd,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
 									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY, NEW=TEMP_TAXONMY_LINE) 
           from &line_tbl) line
+
 	group by NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND
 	) by tmsis_passthrough;
 
-	    
+    
     %end;
 
  EXECUTE (
@@ -270,12 +301,16 @@
 			      and l.&filetyp._MH_TAXONOMY_IND_LINE is null then null
 				  when (coalesce(a.&filetyp._MH_TAXONOMY_IND_HDR,0) + coalesce(l.&filetyp._MH_TAXONOMY_IND_LINE,0))=2 then 1
 				  when a.&filetyp._MH_TAXONOMY_IND_HDR=1 then 2
-				  when l.&filetyp._MH_TAXONOMY_IND_LINE=1 then 3 else 0 end as &filetyp._MH_TAXONOMY_IND
+				  when l.&filetyp._MH_TAXONOMY_IND_LINE=1 then 3 
+				  else 0 end 
+			 as &filetyp._MH_TAXONOMY_IND
 			,case when a.&filetyp._SUD_TAXONOMY_IND_HDR is null
 			      and l.&filetyp._SUD_TAXONOMY_IND_LINE is null then null
 				  when (coalesce(a.&filetyp._SUD_TAXONOMY_IND_HDR,0) + coalesce(l.&filetyp._SUD_TAXONOMY_IND_LINE,0))=2 then 1
 				  when a.&filetyp._SUD_TAXONOMY_IND_HDR=1 then 2
-				  when l.&filetyp._SUD_TAXONOMY_IND_LINE=1 then 3 else 0 end as &filetyp._SUD_TAXONOMY_IND
+				  when l.&filetyp._SUD_TAXONOMY_IND_LINE=1 then 3
+				  else 0 end 
+			 as &filetyp._SUD_TAXONOMY_IND
 		   
 	    %end;
 
@@ -303,6 +338,7 @@
 	  ));
 
    %Get_Audt_counts_clms(&DA_SCHEMA.,&DA_RUN_ID., AWS_Grouper_Macro, 2.1 AWS_ASSIGN_GROUPER_DATA_CONV);
+
 
 %DROP_temp_tables(&clm_tbl._STEP1);
 

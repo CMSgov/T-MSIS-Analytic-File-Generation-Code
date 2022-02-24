@@ -151,6 +151,7 @@ proc sql;
   ) by tmsis_passthrough;
 
   %process_01_header(outtbl=#Prov01_Header);
+
   %process_02_main(runtbl=#Prov01_Header, 
                    outtbl=#Prov02_Main);
 
@@ -787,7 +788,6 @@ proc sql;
 
   execute(
     drop table if exists #Prov04_Licensing_CNST;
-    drop table if exists #Prov05_Identifiers_CNST;
     drop table if exists #Prov10_BedType_CNST;
     drop table if exists #loc_g;
 	drop table if exists #Prov03_Locations_g0;
@@ -827,9 +827,8 @@ proc sql;
 	  where PRVDR_CLSFCTN_TYPE_CD is not null
       order by &srtlist;
   ) by tmsis_passthrough;
-
   execute(
-    create table #Prov06_Taxonomies_ALL
+    create table #Prov06_Taxonomies_CCD2
 	  diststyle key distkey(submitting_state_prov_id) as
       select B.*,
              case when B.PRVDR_CLSFCTN_TYPE_CD='1' then B.PRVDR_CLSFCTN_CD_TAX
@@ -845,6 +844,13 @@ proc sql;
  
   %DROP_temp_tables(#Prov06_Taxonomies_CCD);
 
+** get NPPES primary taxonomy codes from &tmsis_schema..data_anltcs_prvdr_npi_data_vw using NPI from #Prov05_Identifiers_CNST;
+
+  %nppes_tax(TMSIS_SCHEMA=&TMSIS_SCHEMA., id_intbl=#Prov05_Identifiers_CNST, tax_intbl=#Prov06_Taxonomies_CCD2, tax_outtbl=#Prov06_Taxonomies_ALL);
+
+  %DROP_temp_tables(#Prov05_Identifiers_CNST);
+  %DROP_temp_tables(#Prov06_Taxonomies_CCD2);
+
 ** create the separate linked child table;
 
   execute(
@@ -859,7 +865,7 @@ proc sql;
 			 submitting_state_prov_id as SUBMTG_STATE_PRVDR_ID,
 			 PRVDR_CLSFCTN_TYPE_CD,
              PRVDR_CLSFCTN_CD
-			 from #Prov06_Taxonomies_All
+			 from #Prov06_Taxonomies_ALL
 	  		 where PRVDR_CLSFCTN_TYPE_CD is not null and PRVDR_CLSFCTN_CD is not null
       order by TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
   ) by tmsis_passthrough;
@@ -882,7 +888,7 @@ proc sql;
 ** create the fields to merge with the base/main file ;
 
   execute( 
-    %recode_lookup (intbl=#Prov06_Taxonomies_All,
+    %recode_lookup (intbl=#Prov06_Taxonomies_ALL,
                     srtvars=srtlist,
                     fmttbl=prv_formats_sm,
                     fmtnm='TAXTYP', 
@@ -1078,28 +1084,28 @@ proc sql;
                else 0 
              end :: smallint as TRNSPRTN_SRVCS_PRVDR_IND,
              case
-               when PRVDR_CLSFCTN_TYPE_CD='1' and PRVDR_CLSFCTN_SME=1 then 1 
+               when (PRVDR_CLSFCTN_TYPE_CD='1' or PRVDR_CLSFCTN_TYPE_CD='N') and PRVDR_CLSFCTN_SME=1 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='2' and PRVDR_CLSFCTN_SME=4 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='4' and PRVDR_CLSFCTN_SME=7 then 1 
                when PRVDR_CLSFCTN_CD='.' or PRVDR_CLSFCTN_CD is null or PRVDR_CLSFCTN_TYPE_CD='.' or PRVDR_CLSFCTN_TYPE_CD is null then null
-               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
+               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'N' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
               else 0 
              end :: smallint as SUD_SRVC_PRVDR_IND,
              case
-               when PRVDR_CLSFCTN_TYPE_CD='1' and PRVDR_CLSFCTN_SME=2 then 1 
+               when (PRVDR_CLSFCTN_TYPE_CD='1' or PRVDR_CLSFCTN_TYPE_CD='N') and PRVDR_CLSFCTN_SME=2 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='2' and PRVDR_CLSFCTN_SME=5 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='3' and PRVDR_CLSFCTN_MHT=1 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='4' and PRVDR_CLSFCTN_SME=8 then 1 
                when PRVDR_CLSFCTN_CD='.' or PRVDR_CLSFCTN_CD is null or PRVDR_CLSFCTN_TYPE_CD='.' or PRVDR_CLSFCTN_TYPE_CD is null then null
-               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'2' and  PRVDR_CLSFCTN_TYPE_CD<>'3' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
+               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'N' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'3' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
                else 0 
              end :: smallint as MH_SRVC_PRVDR_IND,
              case
-               when PRVDR_CLSFCTN_TYPE_CD='1' and PRVDR_CLSFCTN_SME=3 then 1 
+               when (PRVDR_CLSFCTN_TYPE_CD='1' or PRVDR_CLSFCTN_TYPE_CD='N') and PRVDR_CLSFCTN_SME=3 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='2' and PRVDR_CLSFCTN_SME=6 then 1 
                when PRVDR_CLSFCTN_TYPE_CD='4' and PRVDR_CLSFCTN_SME=9 then 1 
                when PRVDR_CLSFCTN_CD='.' or PRVDR_CLSFCTN_CD is null or PRVDR_CLSFCTN_TYPE_CD='.' or PRVDR_CLSFCTN_TYPE_CD is null then null
-               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
+               when PRVDR_CLSFCTN_TYPE_CD<>'1' and PRVDR_CLSFCTN_TYPE_CD<>'N' and PRVDR_CLSFCTN_TYPE_CD<>'2' and PRVDR_CLSFCTN_TYPE_CD<>'4' then null
                else 0 
              end :: smallint as EMER_SRVCS_PRVDR_IND
 			 from #Prov06_Taxonomies_MHT

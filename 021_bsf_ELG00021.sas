@@ -71,10 +71,9 @@ execute
 	 select submtg_state_cd, msis_ident_num
 	       ,min(&eff_date) as &eff_date
 		   ,max(&end_date) as &end_date
-
 	 from
 	 (
-	 select submtg_state_cd ,msis_ident_num ,&eff_date ,&end_date
+	 select submtg_state_cd ,msis_ident_num ,&eff_date ,&end_date 
 	        ,sum(C) over (partition by submtg_state_cd, msis_ident_num
 			             order by &eff_date, &end_date
                          rows UNBOUNDED PRECEDING) as G
@@ -222,6 +221,16 @@ execute
    (
      create temp table &tab_no._v distkey(msis_ident_num) sortkey(submtg_state_cd,msis_ident_num) 
 	 as
+	 select
+	 	 sub.submtg_state_cd
+		,sub.msis_ident_num
+		,sub.tmsis_run_id
+		,sub.enrlmt_type_cd
+		,sub.&eff_date
+		,sub.&end_date
+		,max(sub.elgbl_aftr_eom_ind) as elgbl_aftr_eom_ind
+	from
+	(
 	 select distinct 
          e21.submtg_state_cd
         ,e21.msis_ident_num
@@ -230,9 +239,15 @@ execute
 		,greatest(case when date_cmp(e02.death_date,&eff_date) in(-1,0) 
                 or (e02.death_date is not null and &eff_date is null) then e02.death_date
               else &eff_date end, &st_dt::date) as &eff_date		
-        ,least(case when date_cmp(e02.death_date,&end_date) in(-1,0) 
-                or (e02.death_date is not null and &end_date is null) then e02.death_date
-              when &end_date is null then '31DEC9999' else &end_date end, &rpt_prd::date) as &end_date
+        ,case when date_cmp(e02.death_date,&end_date) in(-1,0) 
+                		 or (e02.death_date is not null and &end_date is null) then e02.death_date
+                    when &end_date is null then '31DEC9999' 
+					else &end_date 
+					end as &end_date._temp
+		,case when date_cmp(&end_date._temp,&rpt_prd) = 1 or &end_date._temp is null 
+			  then 1 else 0 
+			  end as elgbl_aftr_eom_ind
+		,least(&end_date._temp,&rpt_prd::date) as &end_date
 	 from &tab_no._step3 e21
 	 left join ELG00002_&BSF_FILE_DATE._uniq e02
 	 on e21.submtg_state_cd = e02.submtg_state_cd
@@ -243,6 +258,10 @@ execute
 		  and date_cmp(least(&st_dt,nvl(death_date,&end_date,'31DEC9999')),&st_dt) in(0,1)
 	    /* Also remove any records where the effective date is after their death date */
 		  and date_cmp(&eff_date,least(death_date,'31DEC9999')) <> 1
+		) sub
+		group by sub.submtg_state_cd, sub.msis_ident_num, sub.tmsis_run_id,
+				 sub.enrlmt_type_cd, sub.&eff_date, sub.&end_date
+
 	 ) by tmsis_passthrough;
 
 %process_enrlmt(MDCD,1);
@@ -257,6 +276,7 @@ execute (
         b.submtg_state_cd 
         ,b.msis_ident_num        
 		,max(b.tmsis_run_id) as tmsis_run_id
+		,max(b.elgbl_aftr_eom_ind) as elgbl_aftr_eom_ind_temp
 
 		%do I=1 %to &DAYS_IN_MONTH;
 		 %let yr_mn = %substr(&rpt_out,3,7);
@@ -324,6 +344,11 @@ execute (
 			case when m.MDCD_ENR = 1 then 1
 			     when c.CHIP_ENR  = 1 then 2
 				 else null end as ENROLLMENT_TYPE_FLAG,
+
+			case when ENROLLMENT_TYPE_FLAG is null then null
+				 when ELIGIBLE_LAST_DAY_OF_MONTH_IND = 0 then 0
+				 else ELGBL_AFTR_EOM_IND_TEMP
+				 end as ELGBL_AFTR_EOM_IND,
 
 			/** Single Enroll if only one spell across Medicaid and CHIP and no unknown **/
 			case when b.bucket_c=1 or

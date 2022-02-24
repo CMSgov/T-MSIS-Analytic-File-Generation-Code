@@ -18,6 +18,10 @@
 /*				6/9/2020  - DB modified to apply TAF CCB 2020 Q2 Change Request                             */
 /*              12/15/2020- DB modified to apply TAF CCB 2020 Q4 Change Request                             */
 /*							-MACTAF-1613: Exclude IA CHIP T-MSIS files from TAF Production					*/
+/* 				11/08/2021- DB modified to add FASC to TAF                                                  */
+/* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
+/*				12/06/2021- DB modified to add variable dgns_1_ccsr_dflt_ctgry_cd							*/
+/*							-MACTAF-1802: Add default CCSR dx cat(ip or ot) for primary dx code				*/
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source
 		noerrorabend;
@@ -47,9 +51,9 @@ execute (
 	/* Subset line file and attach row numbers to all records belonging to an ICN set.  Fix PA & IA   */
 	execute (
 
-		create temp table &FL2._LINE
+		create temp table &FL2._LINE_PRE_NPPES
 		distkey (ORGNL_CLM_NUM_LINE) 
-		sortkey (NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND)
+		sortkey (SRVCNG_PRVDR_NPI_NUM)
 
 		as
 
@@ -68,6 +72,26 @@ execute (
 		H.ADJSTMT_IND = A.LINE_ADJSTMT_IND
 
 	) by tmsis_passthrough;
+
+	/* Join line file with NPPES to pick up servicing provider nppes taxonomy code */
+	execute (
+
+		create temp table &FL2._LINE
+		distkey (ORGNL_CLM_NUM_LINE) 
+		sortkey (NEW_SUBMTG_STATE_CD_LINE,ORGNL_CLM_NUM_LINE,ADJSTMT_CLM_NUM_LINE,ADJDCTN_DT_LINE,LINE_ADJSTMT_IND)
+
+		as
+
+		select  A.*
+ 		 		,%var_set_taxo(SELECTED_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY, NEW=SRVCNG_PRVDR_NPPES_TXNMY_CD)
+		from	&FL2._LINE_PRE_NPPES as A
+			    left join
+			    nppes_npi nppes
+		on nppes.prvdr_npi=a.SRVCNG_PRVDR_NPI_NUM   
+
+	) by tmsis_passthrough;
+
 
 	/* Pull out maximum row_number for each partition and compute calculated variables here */
 	/* Revisit coding for accommodation_paid, ancillary_paid, cvr_mh_days_over_65, cvr_mh_days_under_21 here */
@@ -318,6 +342,11 @@ execute (
     ,LT_SUD_TAXONOMY_IND as LT_SUD_TXNMY_IND
     ,nullif(IAP_CONDITION_IND, IAP_CONDITION_IND) as IAP_COND_IND
     ,nullif(PRIMARY_HIERARCHICAL_CONDITION, PRIMARY_HIERARCHICAL_CONDITION) as PRMRY_HIRCHCL_COND
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_ADD_TS
+	,CONVERT_TIMEZONE('EDT', GETDATE()) as REC_UPDT_TS 
+	,%var_set_taxo(BLG_PRVDR_NPPES_TXNMY_CD,cond1=8888888888, cond2=9999999999, cond3=000000000X, cond4=999999999X,
+									  cond5=NONE, cond6=XXXXXXXXXX, cond7=NO TAXONOMY)
+	,DGNS_1_CCSR_DFLT_CTGRY_CD
 
 	FROM 
 	(select *,
@@ -386,13 +415,13 @@ execute (
     ,%var_set_type6(IP_LT_ACTL_SRVC_QTY, new=ACTL_SRVC_QTY,	cond1=88888.888, cond2=99999.990, cond3=999999)
     ,%var_set_type6(IP_LT_ALOWD_SRVC_QTY, new=ALOWD_SRVC_QTY,	cond1=88888.888, cond2=888888.890)
     ,%var_set_type1(var=REV_CD,lpad=4)
-    ,%var_set_type6(REV_CHRG_AMT, 	cond1=8888888888.88, cond2=88888888.88, cond3=888888888.88, cond4=88888888888.88, cond5=99999999.90)
+    ,%var_set_type6(REV_CHRG_AMT, 	cond1=8888888888.88, cond2=88888888.88, cond3=888888888.88, cond4=88888888888.88, cond5=99999999.90, cond6=9999999999.99)
     ,%var_set_type6(ALOWD_AMT,		cond1=888888888.88, cond2=99999999.00, cond3=9999999999.99) 
     ,%var_set_type6(MDCD_PD_AMT,	cond1=888888888.88)
     ,%var_set_type6(OTHR_INSRNC_AMT,		cond1=888888888.88, cond2=88888888888.00, cond3=88888888888.88)
 	,%var_set_type6(MDCD_FFS_EQUIV_AMT, 	cond1=888888888.88, cond2=88888888888.80, cond3=999999.99)
 	,%var_set_type6(TPL_AMT,		cond1=888888888.88)
-	,RN as LINE_NUM 
+	,RN as LINE_NUM
 
 		FROM 	(select *,
      			 case when LINE_ADJSTMT_IND is NOT NULL and    
@@ -401,20 +430,33 @@ execute (
      from &FL._LINE) H
    ) BY TMSIS_PASSTHROUGH;
 
+/* call program to calculate fed assigned service catg */
+%fasc_code(fl=lt);
+
+
 %DROP_temp_tables(&fl._LINE);
 
+   title ;
    EXECUTE(
     INSERT INTO &DA_SCHEMA..TAF_&FL.H
-	SELECT * 
-	FROM &FL.H
-   ) BY TMSIS_PASSTHROUGH;
+
+		SELECT h.* 
+			   ,fasc.fed_srvc_ctgry_cd 
+
+		FROM &FL.H h
+			 left join
+			 &fl._hdr_rolled fasc
+
+		ON   h.&fl._link_key=fasc.&fl._link_key
+		) BY TMSIS_PASSTHROUGH;
 
    	select ht_ct into : HEADER_CT
 	from (select * from connection to tmsis_passthrough
           (select count(submtg_state_cd) as ht_ct
 	      from &FL.H));
 
-    
+%DROP_temp_tables(&fl._hdr_rolled);
+
     EXECUTE(
     INSERT INTO &DA_SCHEMA..TAF_&FL.L
 		(DA_RUN_ID

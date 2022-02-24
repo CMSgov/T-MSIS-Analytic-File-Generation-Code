@@ -3,6 +3,9 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Module macros for BSF. 
+/* 
+/*Modified: 12/6/2021 - MACTAF-1859-"Retire"_1115a_prtcpnt_flag from TAF CCB 2021Q4
+/*						MACTAF-1817-Add elgbl_aftr_eom_ind
 /**********************************************************************************************/
 options minoperator;
 
@@ -960,7 +963,7 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 ,_1932A_SPO_FLAG
 ,_1915A_SPO_FLAG
 ,_1937_ABP_SPO_FLAG
-,_1115A_PARTICIPANT_FLAG  AS _1115A_PRTCPNT_FLAG    
+,_1115A_PARTICIPANT_FLAG AS _1115A_PRTCPNT_FLAG    
 
 %do I=1 %to 10;
 ,upper(nullif(trim(WVR_ID&I),'')) AS WVR_ID&I
@@ -995,6 +998,7 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 ,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_ENT_ID),'')) as ELGBL_ID_MSIS_XWALK_ENT_ID
 ,upper(nullif(trim(ELGBL_ID_MSIS_XWALK_RSN_CHG),'')) as ELGBL_ID_MSIS_XWALK_RSN_CHG
 ,upper(nullif(trim(ELGBLTY_CHG_RSN_CD),'')) as ELGBLTY_CHG_RSN_CD
+,ELGBL_AFTR_EOM_IND
 %mend FINAL_FORMAT;
   %macro drop_table_multi(dsn_list);
     %let tbl_ct = %sysfunc(countw(&dsn_list));
@@ -1402,6 +1406,7 @@ DA_RUN_ID
 ,ELGBL_ID_MSIS_XWALK_ENT_ID 
 ,ELGBL_ID_MSIS_XWALK_RSN_CHG
 ,ELGBLTY_CHG_RSN_CD
+,ELGBL_AFTR_EOM_IND
 %mend BSF_INSERT_ORDER;
 
 %MACRO BUILD_BSF();

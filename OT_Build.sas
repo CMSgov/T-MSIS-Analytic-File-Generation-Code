@@ -6,12 +6,6 @@
 /* Mod:			8/4/17 by CA for interim solution											  */ 						  
 /*                                                                                            */                                                                                                    
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
 *********************************************************************
 *     QSSI PROVIDED MACROS FOR ENVIRONMENT                          *                           
 *     TMSIS_SCHEMA - OPERATIONAL_SCHEMA                             *       
@@ -49,6 +43,7 @@
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Shared_Macros.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Grouper_Macro.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/ot/programs/AWS_OT_Macros.sas";
+%INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/Fasc.sas";
 
 ********************************************************************
 * GLOBAL MACROS AND LOCAL MACROS                                   *
@@ -67,6 +62,7 @@
 %GLOBAL TABLE_NAME_INDB;
 %GLOBAL FL;
 %GLOBAL ST_FILTER;
+%GLOBAL ST_INDEX;
 %GLOBAL HEADER_CT; %LET HEADER_CT = 0;
 %GLOBAL LINE_CT; %LET LINE_CT = 0;
 %LET FL = OT;
@@ -102,7 +98,10 @@ QUIT;
 
 
 %MACRO PROCESS ();
- 
+
+ options nosymbolgen nomprint  nosource  nosource2;
+
+
 /* set up environment variables */
  data _null_;
  length rep_date $ 6 FILE_DATE 6;
@@ -130,22 +129,26 @@ quit;
 
 %macro RUN_STATES;
 
-%DO I=1 %to %SYSFUNC(COUNTW(&STATE_IDS));
-  %let RUN_ID = %SCAN(&RUN_IDS,&I);
-  %let STATE_ID = %SCAN(&STATE_IDS,&I);
+%DO ST_INDEX=1 %to %SYSFUNC(COUNTW(&STATE_IDS));
+  %let RUN_ID = %SCAN(&RUN_IDS,&ST_INDEX);
+  %let STATE_ID = %SCAN(&STATE_IDS,&ST_INDEX);
 
 proc sql;
 
 	%tmsis_connect;    
     sysecho "in claims family -  &STATE_ID";
 	%AWS_Claims_Family_Table_Link (&TMSIS_SCHEMA., COT00002, TMSIS_CLH_REC_OTHR_TOC, OTHR_TOC, a.SRVC_ENDG_DT);  /* OT: a.SRVC_ENDG_DT */
+	sysecho 'in process_nppes';
+	%process_nppes();						
+	sysecho 'in process ccs';	
+    %process_ccs(); 	
     sysecho "in extract line - &STATE_ID"; 
 	%AWS_Extract_Line_OT (&TMSIS_SCHEMA., &fl, OTHR_TOC, COT00003, TMSIS_CLL_REC_OTHR_TOC, a.SRVC_ENDG_DT);
     sysecho "in assign grouper data - &STATE_ID";  
 	%AWS_ASSIGN_GROUPER_DATA_CONV(filetyp=&fl, clm_tbl=&fl._HEADER, line_tbl=&fl._LINE, analysis_date=a.SRVC_ENDG_DT_HEADER,MDC=NO,IAP=YES,PHC=YES,MH_SUD=YES,TAXONOMY=YES); 
 	sysecho "in build ot - &STATE_ID";	
     %BUILD_OT();	
- 	
+	
 %tmsis_disconnect;
 quit;
 

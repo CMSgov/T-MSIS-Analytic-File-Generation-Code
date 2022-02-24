@@ -15,13 +15,6 @@
 /* Modified: by Christina Alva 2/27/2017                                                      */
 /*                                                                                            */
 /**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
-/**********************************************************************************************/
-
 options noquotelenmax mprint symbolgen spool formdlim="~" ls=max nocenter compress=yes;
 
 
@@ -73,6 +66,7 @@ nosqlremerge
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Shared_Macros.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/AWS_Grouper_Macro.sas";
 %INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/rx/programs/AWS_RX_Macros.sas";
+%INCLUDE "/sasdata/users/&sysuserid/&tmsis./&sub_env./data_analytics/taf/programs/Fasc.sas";
 
 ********************************************************************
 * GLOBAL MACROS AND LOCAL MACROS                                   *
@@ -150,11 +144,14 @@ proc sql;
     %AWS_MAXID_pull (&TMSIS_SCHEMA., TMSIS_FIL_PRCSG_JOB_CNTL); /* PULLS MAX RUN IDS FROM FILE HEADER - 01 SEGMENT*/
     sysecho 'in claims family';
     %AWS_Claims_Family_Table_Link (&TMSIS_SCHEMA.,CRX00002, TMSIS_CLH_REC_&fl, &fl, a.RX_FILL_DT);  /* IP: a.DSCHRG_DT, LT: a.SRVC_ENDG_DT, RX: a.FILL_DT, OT: a.SRVC_ENDG_DT */
+	sysecho 'in process_nppes';
+	%process_nppes();						
+	sysecho 'in process ccs';	
+    %process_ccs(); 	
     sysecho 'in extract line';
 	%AWS_Extract_Line_&fl (&TMSIS_SCHEMA., &fl, CRX00003, TMSIS_CLL_REC_&fl, a.RX_FILL_DT);  /* PULL IN LINE VARIABLES*/
 	sysecho "in build &fl";	
     %BUILD_&fl();	
-
  	sysecho 'in jobcntl updt2';
 	%JOB_CONTROL_UPDT2(&DA_RUN_ID., &DA_SCHEMA.);
 	%let TABLE_NAME = TAF_&fl.H;

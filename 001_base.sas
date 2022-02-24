@@ -77,6 +77,7 @@
 									 
 									 %last_best(incol=AGE_NUM, outcol = AGE_NUM_TEMP)	
 									 %last_best(incol=AGE_GRP_FLAG, outcol = AGE_GRP_FLAG_TEMP)	
+									 %last_best(incol=ELGBL_AFTR_EOM_IND, outcol = ELGBL_AFTR_EOM_TEMP)
 									 %nonmiss_month(incol = msis_ident_num,outcol = BSF_RECORD)
 
 									 %monthly_array(ELGBLTY_CHG_RSN_CD)
@@ -259,7 +260,7 @@
 			   b.DEATH_DT,
 			   b.DCSD_FLAG,
 
-			   %age_calculate
+			   %age_date_calculate
 
 			   b.GNDR_CD,
 			   b.MRTL_STUS_CD,
@@ -648,6 +649,7 @@
 			,ELGBLTY_CHG_RSN_CD_10
 			,ELGBLTY_CHG_RSN_CD_11
 			,ELGBLTY_CHG_RSN_CD_12
+			,ELGBL_AFTR_EOY_IND
 
 		%mend basecols;
 

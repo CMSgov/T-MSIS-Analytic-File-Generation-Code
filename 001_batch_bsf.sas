@@ -10,7 +10,7 @@
 /*          to make calls against Redshift to create 20 individual tables, which are then 
 /*          combined to create the final BSF summary file (name controled by above macro vars).
 /**********************************************************************************************/
-
+options mprint source2;
 /*get T-MSIS configuration */
 %let tms_config_macro="/sasdata/users/&sysuserid/tmsislockdown/config/tms_config.sas";
 %include &tms_config_macro;
