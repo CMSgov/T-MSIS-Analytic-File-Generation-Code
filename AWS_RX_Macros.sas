@@ -26,6 +26,19 @@
 /*							-MACTAF-1593: Add NEW_REFL_IND valid value 99                                   */
 /* 				11/08/2021- DB modified to add FASC to TAF                                                  */
 /* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
+/*				05/03/2022- DB modified For V7.1															
+/*							-MACTAF-1966, MACTAF-1944															
+/*								1. Increase width of XIX-MBESCBES-CATEGORY-OF-SERVICE from X(4) to X(5)	    
+/*							-MACTAF-1950- Rename data elements 												
+/*							 DISPENSE-FEE: (LINE LEVEL) DSPNS_FEE_AMT -> DSPNS_FEE_SBMTD
+/*							 COPAY-AMT: (LINE LEVEL) COPAY_AMT -> BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COPAYMENT-AMOUNT: (HEADER LEVEL) BENE_COPMT_AMT -> TOT_BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COINSURANCE-AMOUNT: (HEADER LEVEL) BENE_COINSRNC_AMT -> TOT_BENE_COINSRNC_PD_AMT
+/*							 BENEFICIARY-DEDUCTIBLE-AMOUNT: (HEADER LEVEL) BENE_DDCTBL_AMT -> TOT_BENE_DDCTBL_PD_AMT
+/*							-MACTAF-1952 - Modify data element width and rename								
+/*							 OT-RX-CLAIM-QUANTITY-ACTUAL: othr_toc_rx_clm_aCTL_qty ->	RX_QTY_ACTL
+/*							 OT-RX-CLAIM-QUANTITY-ALLOWED: othr_toc_rx_clm_alowd_qty -> RX_QTY_ALOWD
+/*             note to DB: MODS COMPLETE ON THIS ONE 5/4/2022
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 
@@ -211,9 +224,9 @@ execute (
    ,%var_set_type6(tot_mdcr_coinsrnc_amt, cond1=888888888.88)
    ,%var_set_type6(TP_COINSRNC_PD_AMT,	cond1=888888888.88)
    ,%var_set_type6(TP_COPMT_PD_AMT,		cond1=99999999999.00, cond2=888888888.88, cond3=888888888.00, cond4=88888888888.00)
-   ,%var_set_type6(bene_coinsrnc_amt, 	cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)                
-   ,%var_set_type6(bene_copmt_amt,		cond1=88888888888.00, cond2=888888888.88, cond3=888888888.00)
-   ,%var_set_type6(bene_ddctbl_amt,		cond1=88888888888.00, cond2=888888888.88, cond3=888888888.00)
+   ,%var_set_type6(TOT_BENE_COINSRNC_PD_AMT,new=BENE_COINSRNC_AMT, 	cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)                
+   ,%var_set_type6(TOT_BENE_COPMT_PD_AMT,new=BENE_COPMT_AMT,	cond1=88888888888.00, cond2=888888888.88, cond3=888888888.00)
+   ,%var_set_type6(TOT_BENE_DDCTBL_PD_AMT,new=BENE_DDCTBL_AMT,	cond1=88888888888.00, cond2=888888888.88, cond3=888888888.00)
    ,%var_set_type2(COPAY_WVD_IND,0,cond1=0,cond2=1)
    ,cll_cnt
    ,num_cll 
@@ -259,7 +272,7 @@ execute (
     ,%var_set_type6(suply_days_cnt, cond1=8888, cond2=999, cond3=0)        
     ,%var_set_type5(NEW_REFL_IND,lpad=2,lowerbound=0,upperbound=99)
     ,%var_set_type2(BRND_GNRC_IND,0,cond1=0,cond2=1,cond3=2,cond4=3,cond5=4)
-    ,%var_set_type6(dspns_fee_amt, cond1=88888.88) 
+    ,%var_set_type6(DSPNS_FEE_SBMTD,new=dspns_fee_amt, cond1=88888.88) 
     ,case when trim(DRUG_UTLZTN_CD) is not NULL then upper(DRUG_UTLZTN_CD)
 	  else NULL
      end as DRUG_UTLZTN_CD
@@ -269,8 +282,8 @@ execute (
     ,%var_set_type2(REBT_ELGBL_IND,0,cond1=0,cond2=1,cond3=2)
     ,%var_set_type5(IMNZTN_TYPE_CD,lpad=2,lowerbound=0,upperbound=29)
     ,%var_set_type5(BNFT_TYPE_CD,lpad=3,lowerbound=001,upperbound=108)
-    ,%var_set_type6(othr_toc_rx_clm_alowd_qty, new=alowd_srvc_qty, cond1=99999, cond2=99999.999, cond3=888888.000, cond4=999999, cond5=888888.880)
-    ,%var_set_type6(othr_toc_rx_clm_actl_qty, new=actl_srvc_qty, cond1=999999.99, cond2=888888, cond3=999999, cond4=0)
+    ,%var_set_type6(RX_QTY_ALOWD, new=alowd_srvc_qty, cond1=99999, cond2=99999.999, cond3=888888.000, cond4=999999, cond5=888888.880)
+    ,%var_set_type6(RX_QTY_ACTL, new=actl_srvc_qty, cond1=999999.99, cond2=888888, cond3=999999, cond4=0)
     ,%var_set_type2(CMS_64_FED_REIMBRSMT_CTGRY_CD,2,cond1=01,cond2=02,cond3=03,cond4=04)
     ,case when XIX_SRVC_CTGRY_CD in &XIX_SRVC_CTGRY_CD_values. then XIX_SRVC_CTGRY_CD
      else null end as XIX_SRVC_CTGRY_CD
@@ -279,7 +292,7 @@ execute (
     ,%var_set_type1(CLL_STUS_CD)
     ,%var_set_type6(bill_amt, 		cond1=9999999999.99, cond2=999999.99, cond3=999999, cond4=888888888.88)  
     ,%var_set_type6(alowd_amt, 		cond1=9999999999.99, cond2=888888888.88, cond3=99999999.00)                        
-    ,%var_set_type6(copay_amt,		cond1=888888888.88, cond2=88888888888.00)
+    ,%var_set_type6(BENE_COPMT_PD_AMT,new=copay_amt,	cond1=888888888.88, cond2=88888888888.00)
     ,%var_set_type6(tpl_amt,		cond1=888888888.88)
     ,%var_set_type6(mdcd_pd_amt,	cond1=888888888.88)
     ,%var_set_type6(mdcr_pd_amt,	cond1=88888888888.88, cond2=99999999999.00, cond3=888888888.88, cond4=88888888888.00, cond5=8888888.88, cond6=9999999999.99)
@@ -409,9 +422,9 @@ execute (
 , coalesce(a.ADJDCTN_DT,'01JAN1960') as ADJDCTN_DT
 , upper(COALESCE(a.ADJSTMT_IND,'X')) AS ADJSTMT_IND   
 , upper(a.ADJSTMT_RSN_CD) as ADJSTMT_RSN_CD  
-, a.BENE_COINSRNC_AMT 
-, a.BENE_COPMT_AMT   
-, a.BENE_DDCTBL_AMT   
+, a.TOT_BENE_COINSRNC_PD_AMT 
+, a.TOT_BENE_COPMT_PD_AMT   
+, a.TOT_BENE_DDCTBL_PD_AMT   
 , upper(a.BLG_PRVDR_NPI_NUM) as BLG_PRVDR_NPI_NUM         
 , upper(a.BLG_PRVDR_NUM) as BLG_PRVDR_NUM                      
 , upper(a.BLG_PRVDR_SPCLTY_CD) as BLG_PRVDR_SPCLTY_CD                
@@ -482,14 +495,14 @@ execute (
 , upper(a.BRND_GNRC_IND) as BRND_GNRC_IND           
 , upper(a.CMS_64_FED_REIMBRSMT_CTGRY_CD) as CMS_64_FED_REIMBRSMT_CTGRY_CD        
 , upper(a.CMPND_DSG_FORM_CD) as CMPND_DSG_FORM_CD                            
-, a.COPAY_AMT
+, a.BENE_COPMT_PD_AMT
 , coalesce(a.ADJDCTN_DT, '01JAN1960') AS ADJDCTN_DT_LINE
 , coalesce(upper(a.ADJSTMT_CLM_NUM),'~') AS ADJSTMT_CLM_NUM_LINE                       
 , coalesce(upper(a.ORGNL_CLM_NUM),'~') AS ORGNL_CLM_NUM_LINE 
 , upper(a.ORGNL_LINE_NUM) as ORGNL_LINE_NUM                         
 , upper(a.ADJSTMT_LINE_NUM) as ADJSTMT_LINE_NUM                           
 , a.SUPLY_DAYS_CNT                                   
-, a.DSPNS_FEE_AMT                                     
+, a.DSPNS_FEE_SBMTD                                     
 , upper(a.DRUG_UTLZTN_CD) as DRUG_UTLZTN_CD                               
 , a.DTL_MTRC_DCML_QTY  
 , upper(a.IMNZTN_TYPE_CD) as IMNZTN_TYPE_CD                             
@@ -497,8 +510,8 @@ execute (
 , a.MDCD_PD_AMT            
 , upper(a.NDC_CD) as NDC_CD                                         
 , upper(a.NEW_REFL_IND) as NEW_REFL_IND                                   
-, a.OTHR_TOC_RX_CLM_ACTL_QTY                 
-, a.OTHR_TOC_RX_CLM_ALOWD_QTY 
+, a.RX_QTY_ACTL                 
+, a.RX_QTY_ALOWD 
 , a.MDCR_COINSRNC_PD_AMT
 , a.MDCR_DDCTBL_AMT 
 , a.OTHR_INSRNC_AMT   

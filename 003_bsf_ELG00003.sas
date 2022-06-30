@@ -3,14 +3,11 @@
 /*Author: Gerry Skurski, Mathematica Policy Research
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_VAR_DMGRPHC_ELGBLTY and create unique output for BSF.
-/*Mod:  
+/*Mod:     05/03/2022- DB modified For V7.1													  
+/*					   MACTAF-1946- Rename data elements   									  
+/*						PRIMARY-LANGUAGE-ENGL-PROF-CODE: PRMRY_LANG_ENGLSH_PRFCNCY -> ENGLSH_PRFCNCY_CD 
+
 /*Notes: This program is included by 001_batch_bsf.sas
-/**********************************************************************************************/
-/* © 2020 Mathematica Inc. 																	  */
-/* The TMSIS Analytic File (TAF) code was developed by Mathematica Inc. as part of the 	      */
-/* MACBIS Business Analytics and Data Quality Development project funded by the U.S. 	      */
-/* Department of Health and Human Services – Centers for Medicare and Medicaid Services (CMS) */
-/* through Contract No. HHSM-500-2014-00034I/HHSM-500-T0005  							  	  */
 /**********************************************************************************************/
 
 %macro create_prmry_lang_cd_table;
@@ -581,7 +578,7 @@ select * from connection to tmsis_passthrough
 %MultiIds(sort_key=%str(coalesce(mrtl_stus_cd,'xx') || coalesce(cast(ssn_num as char(10)),'xx') || coalesce(incm_cd,'xx') ||
                         coalesce(vet_ind,'xx') ||coalesce(ctznshp_ind,'xx') || coalesce(imgrtn_stus_cd,'xx') || 
                         coalesce(upper(prmry_lang_cd),'xx') || coalesce(hsehld_size_cd,'xx') || coalesce(mdcr_hicn_num,'xx') ||
-                        coalesce(chip_cd,'xx') || coalesce(prmry_lang_englsh_prfcncy_cd,'xx')),suffix=,val=_v)
+                        coalesce(chip_cd,'xx') || coalesce(ENGLSH_PRFCNCY_CD,'xx')),suffix=,val=_v)
 
 title "Number of beneficiares who were processed for duplicates in &tab_no";
 select * from connection to tmsis_passthrough

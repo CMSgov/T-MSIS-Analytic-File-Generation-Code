@@ -6,6 +6,11 @@
 /* 
 /*Modified: 12/6/2021 - MACTAF-1859-"Retire"_1115a_prtcpnt_flag from TAF CCB 2021Q4
 /*						MACTAF-1817-Add elgbl_aftr_eom_ind
+/*		 	05/03/2022- DB modified For V7.1													  
+/*					    MACTAF-1946- Rename data elements   									  
+/*						(ELG003) PRIMARY-LANGUAGE-ENGL-PROF-CODE-> ENGLSH_PRFCNCY_CD
+/*						(ELG016) CERTIFIED-AMERICA-INDIAN-ALASKAN-NATIVE-INDICATOR-> AMRCN_INDN_ALSKA_NTV_IND
+
 /**********************************************************************************************/
 options minoperator;
 
@@ -317,7 +322,7 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 , &tbl..IMGRTN_STUS_5_YR_BAR_END_DT
 ,%set_to_null(IMGRTN_VRFCTN_IND,%str(0 1))      
 ,upper(&tbl..PRMRY_LANG_CD) as PRMRY_LANG_CD
-,%set_to_null(PRMRY_LANG_ENGLSH_PRFCNCY_CD,%str(0 1 2 3))
+,%set_to_null(ENGLSH_PRFCNCY_CD,%str(0 1 2 3))     /* TO BE MOD */
 ,%set_to_null(HSEHLD_SIZE_CD,%str(01 02 03 04 05 06 07 08)) 
 ,%set_to_null(PRGNT_IND,%str(0 1)) 
 , &tbl..MDCR_HICN_NUM       
@@ -684,7 +689,7 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 , &tbl..RACE_OTHR_TXT  
 , %end;
   
-%set_to_null(CRTFD_AMRCN_INDN_ALSKN_NTV_IND,%str(0 1 2))
+%set_to_null(AMRCN_INDN_ALSKA_NTV_IND,%str(0 1 2))        /* TO BE MOD */
 
 %mend ELG00016;
 
@@ -867,11 +872,11 @@ case when upper(trim(&tbl..&var)) in(&valids) then upper(trim(&tbl..&var)) else 
 ,%fix_old_dates(IMGRTN_STUS_5_YR_BAR_END_DT)
 ,upper(nullif(trim(PRMRY_LANG_CODE),'')) AS OTHR_LANG_HOME_CD
 ,PRMRY_LANG_FLAG
-,upper(nullif(trim(PRMRY_LANG_ENGLSH_PRFCNCY_CD),'')) AS PRMRY_LANG_ENGLSH_PRFCNCY_CD
+,upper(nullif(trim(ENGLSH_PRFCNCY_CD),'')) AS PRMRY_LANG_ENGLSH_PRFCNCY_CD		/* TO BE MOD */
 ,upper(nullif(trim(HSEHLD_SIZE_CD),'')) AS HSEHLD_SIZE_CD
 ,null AS PRGNT_IND
 ,null::smallint AS PRGNCY_FLAG
-,upper(nullif(trim(CRTFD_AMRCN_INDN_ALSKN_NTV_IND),'')) AS CRTFD_AMRCN_INDN_ALSKN_NTV_IND
+,upper(nullif(trim(AMRCN_INDN_ALSKA_NTV_IND),'')) AS CRTFD_AMRCN_INDN_ALSKN_NTV_IND /* TO BE MOD */
 ,upper(nullif(trim(ETHNCTY_CD),'')) AS ETHNCTY_CD
 ,upper(nullif(trim(ELGBL_LINE_1_ADR_HOME),'')) AS ELGBL_LINE_1_ADR_HOME
 ,upper(nullif(trim(ELGBL_LINE_2_ADR_HOME),'')) AS ELGBL_LINE_2_ADR_HOME

@@ -22,6 +22,16 @@
 /* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
 /*				12/06/2021- DB modified to add variable dgns_1_ccsr_dflt_ctgry_cd							*/
 /*							-MACTAF-1802: Add default CCSR dx cat(ip or ot) for primary dx code				*/
+/*				05/03/2022- DB modified For V7.1															*/
+/*							-MACTAF-1966, MACTAF-1942														*/	
+/*								1. Increase width of XIX-MBESCBES-CATEGORY-OF-SERVICE from X(4) to X(5)	    */
+/*							-MACTAF-1948- Rename data elements 												*/
+/*							 IP-LT-QUANTITY-OF-SERVICE-ACTUAL: IP_LT_ACTL_SRVC_QTY -> RC_QTY_ACTL	
+/*							 IP-LT-QUANTITY-OF-SERVICE-ALLOWED: IP_LT_ALOWD_SRVC_QTY -> RC_QTY_ALOWD
+/*							 BENEFICIARY-COPAYMENT-AMOUNT: (HEADER LEVEL) BENE_COPMT_AMT -> TOT_BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COINSURANCE-AMOUNT: (HEADER LEVEL) BENE_COINSRNC_AMT -> TOT_BENE_COINSRNC_PD_AMT
+/*							 BENEFICIARY-DEDUCTIBLE-AMOUNT: (HEADER LEVEL) BENE_DDCTBL_AMT -> TOT_BENE_DDCTBL_PD_AMT
+/*             note to DB: MODS COMPLETE ON THIS ONE 5/4/2022
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source
 		noerrorabend;
@@ -293,9 +303,9 @@ execute (
 	,%var_set_type6(TP_COPMT_PD_AMT,    cond1=88888888888, cond2=888888888.00, cond3=888888888.88, cond4=99999999999.00)
     ,%var_set_type2(var=MDCR_CMBND_DDCTBL_IND,lpad=0,cond1=0,cond2=1)
     ,%var_set_type2(var=MDCR_REIMBRSMT_TYPE_CD,lpad=2,cond1=01,cond2=02,cond3=03,cond4=04,cond5=05,cond6=06,cond7=07,cond8=08,cond9=09)
-    ,%var_set_type6(BENE_COINSRNC_AMT,  cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
-    ,%var_set_type6(BENE_COPMT_AMT,		cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
-	,%var_set_type6(BENE_DDCTBL_AMT,    cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+    ,%var_set_type6(TOT_BENE_COINSRNC_PD_AMT,new=BENE_COINSRNC_AMT,  cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+    ,%var_set_type6(TOT_BENE_COPMT_PD_AMT,new=BENE_COPMT_AMT,     cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_DDCTBL_PD_AMT,new=BENE_DDCTBL_AMT,    cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
     ,%var_set_type2(var=COPAY_WVD_IND,lpad=0,cond1=0,cond2=1)
     ,%fix_old_dates(OCRNC_01_CD_EFCTV_DT)
     ,%fix_old_dates(OCRNC_01_CD_END_DT)
@@ -412,8 +422,8 @@ execute (
           then PRVDR_FAC_TYPE_CD
        else NULL
      end as PRVDR_FAC_TYPE_CD
-    ,%var_set_type6(IP_LT_ACTL_SRVC_QTY, new=ACTL_SRVC_QTY,	cond1=88888.888, cond2=99999.990, cond3=999999)
-    ,%var_set_type6(IP_LT_ALOWD_SRVC_QTY, new=ALOWD_SRVC_QTY,	cond1=88888.888, cond2=888888.890)
+    ,%var_set_type6(RC_QTY_ACTL, new=ACTL_SRVC_QTY,	cond1=88888.888, cond2=99999.990, cond3=999999)
+    ,%var_set_type6(RC_QTY_ALOWD, new=ALOWD_SRVC_QTY,	cond1=88888.888, cond2=888888.890)
     ,%var_set_type1(var=REV_CD,lpad=4)
     ,%var_set_type6(REV_CHRG_AMT, 	cond1=8888888888.88, cond2=88888888.88, cond3=888888888.88, cond4=88888888888.88, cond5=99999999.90, cond6=9999999999.99)
     ,%var_set_type6(ALOWD_AMT,		cond1=888888888.88, cond2=99999999.00, cond3=9999999999.99) 
@@ -554,12 +564,12 @@ execute (
 , upper(a.ADMTG_PRVDR_SPCLTY_CD) as admtg_prvdr_spclty_cd                          
 , upper(a.ADMTG_PRVDR_TXNMY_CD) as admtg_prvdr_txnmy_cd                             
 , upper(a.ADMTG_PRVDR_TYPE_CD) as admtg_prvdr_type_cd                               
-, a.SRVC_BGNNG_DT                                            
-, a.BENE_COINSRNC_AMT                               
+, a.SRVC_BGNNG_DT 
+, a.TOT_BENE_COINSRNC_PD_AMT                               
 , a.BENE_COINSRNC_PD_DT                            
-, a.BENE_COPMT_AMT                                    
+, a.TOT_BENE_COPMT_PD_AMT                                    
 , a.BENE_COPMT_PD_DT                                  
-, a.BENE_DDCTBL_AMT                                    
+, a.TOT_BENE_DDCTBL_PD_AMT                                    
 , a.BENE_DDCTBL_PD_DT                                
 , upper(a.BLG_PRVDR_NPI_NUM) as blg_prvdr_npi_num                               
 , upper(a.BLG_PRVDR_NUM) as blg_prvdr_num                                      
@@ -726,8 +736,8 @@ execute (
 , coalesce(upper(a.ADJSTMT_CLM_NUM),'~') AS ADJSTMT_CLM_NUM_LINE                         
 , coalesce(upper(a.ORGNL_CLM_NUM),'~') AS ORGNL_CLM_NUM_LINE                                  
 , upper(a.IMNZTN_TYPE_CD) as imnztn_type_cd             
-, a.IP_LT_ACTL_SRVC_QTY              
-, a.IP_LT_ALOWD_SRVC_QTY          
+, a.RC_QTY_ACTL              
+, a.RC_QTY_ALOWD          
 , coalesce(upper(a.LINE_ADJSTMT_IND),'X') as LINE_ADJSTMT_IND
 , upper(a.ADJSTMT_LINE_RSN_CD) as adjstmt_line_rsn_cd
 , upper(a.ADJSTMT_LINE_NUM) as adjstmt_line_num

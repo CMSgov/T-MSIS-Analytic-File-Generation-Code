@@ -24,6 +24,17 @@
 /* 							-MACTAF-1821: New federally assigned TOS variable - all claims                  */
 /*				12/06/2021- DB modified to add TAF CCB 2021 Q4 Change Request								*/
 /*							-MACTAF-1802: Add default CCSR dx cat(ip lt or ot) for primary dx code			*/
+/*				05/03/2022- DB modified For V7.1															*/
+/*							-MACTAF-1966, MACTAF-1941														*/	
+/*								1. Increase width of XIX-MBESCBES-CATEGORY-OF-SERVICE from X(4) to X(5)	    */
+/*							-MACTAF-1945 -Modify DRG-REL-WEIGHT data type from X(8) to 9(8)					*/ 
+/*							-MACTAF-1947- Rename data elements 												*/
+/*							 IP-LT-QUANTITY-OF-SERVICE-ACTUAL: IP_LT_ACTL_SRVC_QTY -> RC_QTY_ACTL	
+/*							 IP-LT-QUANTITY-OF-SERVICE-ALLOWED: IP_LT_ALOWD_SRVC_QTY -> RC_QTY_ALOWD
+/*							 BENEFICIARY-COPAYMENT-AMOUNT: (HEADER LEVEL) BENE_COPMT_AMT -> TOT_BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COINSURANCE-AMOUNT: (HEADER LEVEL) BENE_COINSRNC_AMT -> TOT_BENE_COINSRNC_PD_AMT
+/*							 BENEFICIARY-DEDUCTIBLE-AMOUNT: (HEADER LEVEL) BENE_DDCTBL_AMT -> TOT_BENE_DDCTBL_PD_AMT
+/*             note to DB: MODS COMPLETE ON THIS ONE 5/4/2022
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 options spool;
@@ -304,18 +315,27 @@ execute (
 	,%var_set_type6(TP_COPMT_PD_AMT,  cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00, cond4=99999999999.00)
 	,%var_set_type6(MDCD_DSH_PD_AMT,  cond1=888888888.88)
 	,%var_set_type6(DRG_OUTLIER_AMT,  cond1=888888888.88)
+
+
+	,drg_rltv_wt_num
+	/*
+	,%var_set_type6(DRG_RLTV_WT_NUM,  cond1=99999999)
 	,case 
-		when regexp_count(drg_rltv_wt_num,'[^0-9.]')>0 or regexp_count(drg_rltv_wt_num,'[.]')>1 then null
-		when cast(drg_rltv_wt_num as numeric(8,0))>9999999 then null
-	 else cast(drg_rltv_wt_num as numeric(11,4)) end as DRG_RLTV_WT_NUM  
+		
+		when regexp_count(cast(drg_rltv_wt_num as char(8)),'[^0-9.]')>0 or 
+			 regexp_count(cast(drg_rltv_wt_num as char(8)),'[.]')>1 then null
+		
+		when drg_rltv_wt_num>99999999 then null
+	 else drg_rltv_wt_num  *cast(drg_rltv_wt_num as numeric(11,4)) * end as DRG_RLTV_WT_NUM  
+	*/
 	,%var_set_type6(MDCR_PD_AMT,	  cond1=888888888.88, cond2=8888888.88, cond3=88888888888.00, cond4=88888888888.88, cond5=99999999999.00, cond6=9999999999.99, cond7=8888888888.88)
 	,%var_set_type6(TOT_MDCR_DDCTBL_AMT, cond1=888888888.88, cond2=99999, cond3=88888888888.00)
 	,%var_set_type6(TOT_MDCR_COINSRNC_AMT, cond1=888888888.88)
 	,%var_set_type2(MDCR_CMBND_DDCTBL_IND,0,cond1=0,cond2=1)
 	,%var_set_type2(mdcr_reimbrsmt_type_cd,2,cond1=01,cond2=02,cond3=03,cond4=04,cond5=05,cond6=06,cond7=07,cond8=08,cond9=09)
-	,%var_set_type6(BENE_COINSRNC_AMT,cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
-	,%var_set_type6(BENE_COPMT_AMT,   cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
-	,%var_set_type6(BENE_DDCTBL_AMT,  cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_COINSRNC_PD_AMT,new=BENE_COINSRNC_AMT,cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_COPMT_PD_AMT,new=BENE_COPMT_AMT,   cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_DDCTBL_PD_AMT,new=BENE_DDCTBL_AMT, cond1=888888888.88, cond2=888888888.00, cond3=88888888888.00)
 	,%var_set_type2(COPAY_WVD_IND,0,cond1=0,cond2=1)
 	,%fix_old_dates(OCRNC_01_CD_EFCTV_DT)
 	,%fix_old_dates(OCRNC_01_CD_END_DT)
@@ -417,8 +437,8 @@ execute (
      	,case when date_cmp(SRVC_ENDG_DT,'1600-01-01')=-1 then '1599-12-31'::date else nullif(SRVC_ENDG_DT,'01JAN1960') end as SRVC_ENDG_DT
 		,%var_set_type5(BNFT_TYPE_CD,lpad=3,lowerbound=001,upperbound=108)
 		,%var_set_type1(REV_CD,lpad=4)
-		,%var_set_type6(IP_LT_ACTL_SRVC_QTY, new=ACTL_SRVC_QTY, cond1=999999, cond2=88888.888, cond3=99999.990)
-		,%var_set_type6(IP_LT_ALOWD_SRVC_QTY, new=ALOWD_SRVC_QTY, cond1=888888.89, cond2=88888.888)
+		,%var_set_type6(RC_QTY_ACTL, new=ACTL_SRVC_QTY, cond1=999999, cond2=88888.888, cond3=99999.990)
+		,%var_set_type6(RC_QTY_ALOWD, new=ALOWD_SRVC_QTY, cond1=888888.89, cond2=88888.888)
 		,%var_set_type6(REV_CHRG_AMT, cond1=88888888888.88, cond2=99999999.9, cond3=888888888.88, cond4=8888888888.88, cond5=88888888.88, cond6=9999999999.99)
 		,%var_set_type1(SRVCNG_PRVDR_NUM)
 		,%var_set_type1(PRSCRBNG_PRVDR_NPI_NUM,new=SRVCNG_PRVDR_NPI_NUM)
@@ -578,9 +598,9 @@ execute (
 	, upper(a.ADMTG_PRVDR_SPCLTY_CD) as admtg_prvdr_spclty_cd
 	, upper(a.ADMTG_PRVDR_TXNMY_CD) as admtg_prvdr_txnmy_cd
 	, upper(a.ADMTG_PRVDR_TYPE_CD) as admtg_prvdr_type_cd
-	, a.BENE_COINSRNC_AMT
-	, a.BENE_COPMT_AMT
-	, a.BENE_DDCTBL_AMT
+	, a.TOT_BENE_COINSRNC_PD_AMT
+	, a.TOT_BENE_COPMT_PD_AMT
+	, a.TOT_BENE_DDCTBL_PD_AMT
 	, upper(a.BLG_PRVDR_NPI_NUM) as blg_prvdr_npi_num
 	, upper(a.BLG_PRVDR_NUM) as blg_prvdr_num
 	, upper(a.BLG_PRVDR_SPCLTY_CD) as blg_prvdr_spclty_cd
@@ -759,8 +779,8 @@ execute (
 		, coalesce(upper(a.ADJSTMT_CLM_NUM),'~') as ADJSTMT_CLM_NUM_LINE
 		, coalesce(upper(a.ORGNL_CLM_NUM),'~') as ORGNL_CLM_NUM_LINE
 		, upper(a.IMNZTN_TYPE_CD) as imnztn_type_cd
-		, a.IP_LT_ACTL_SRVC_QTY 
-		, a.IP_LT_ALOWD_SRVC_QTY
+		, a.RC_QTY_ACTL
+		, a.RC_QTY_ALOWD
 		, coalesce(upper(a.LINE_ADJSTMT_IND),'X') as LINE_ADJSTMT_IND
 		, upper(a.ADJSTMT_LINE_NUM) as ADJSTMT_LINE_NUM                         
 		, upper(a.ORGNL_LINE_NUM) as ORGNL_LINE_NUM

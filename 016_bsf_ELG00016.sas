@@ -4,6 +4,10 @@
 /*Date: 3/2/2017
 /*Purpose: Process TMSIS_RACE_INFO and create unique output for BSF.
 /*Mod:   12/06/2021: New valid value Other(018) for RACE 
+/*		 05/03/2022- DB modified For V7.1													  
+/*					-MACTAF-1946- Rename data elements   									  
+/*						CERTIFIED-AMERICA-INDIAN-ALASKAN-NATIVE-INDICATOR->
+
 /*Notes: This program is included by 001_batch_bsf.sas
 /**********************************************************************************************/
 
@@ -15,7 +19,7 @@ execute (
 	 select 
         submtg_state_cd, 
         msis_ident_num, 
-		CRTFD_AMRCN_INDN_ALSKN_NTV_IND,
+		AMRCN_INDN_ALSKA_NTV_IND,
 
 		row_number() over (partition by submtg_state_cd,
 		                        msis_ident_num
@@ -25,9 +29,9 @@ execute (
 								&eff_date desc,
 								&end_date desc,
 								REC_NUM desc,
-                                CRTFD_AMRCN_INDN_ALSKN_NTV_IND) as keeper
+                                AMRCN_INDN_ALSKA_NTV_IND) as keeper
 		from &tab_no
-        where CRTFD_AMRCN_INDN_ALSKN_NTV_IND is not null
+        where AMRCN_INDN_ALSKA_NTV_IND is not null
 		) by tmsis_passthrough;
 
 execute (
@@ -75,7 +79,7 @@ execute (
 	 sortkey(submtg_state_cd,msis_ident_num) as
 	 select 
         t1.*,
-		t2.CRTFD_AMRCN_INDN_ALSKN_NTV_IND,
+		t2.AMRCN_INDN_ALSKA_NTV_IND,
 
 		case when 
         (coalesce(ASIAN_INDIAN_FLG,0)+ coalesce(CHINESE_FLG,0)+

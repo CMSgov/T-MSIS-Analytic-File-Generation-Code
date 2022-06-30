@@ -28,6 +28,7 @@
 ** 06/09/2020  | program updated (H. Cohen) removed unused code for grouping records and assigning _ndx
 ** 09/08/2020  | program updated (H. Cohen) CCB changes
 ** 12/2020     | program updated (H. Cohen) CCB changes
+** 05/06/2022  | program updated (T. Bullock) CCB changes v7.1
 ** ==========================================================================;
 
 %let taf = prv;
@@ -682,7 +683,7 @@ proc sql;
 			 submitting_state_prov_id as SUBMTG_STATE_PRVDR_ID,
              prov_location_id as PRVDR_LCTN_ID,
              PRVDR_ID_TYPE_CD,
-             prov_identifier as PRVDR_ID,
+             cast(prov_identifier as varchar(12)) as PRVDR_ID,
              prov_identifier_issuing_entity_id as PRVDR_ID_ISSG_ENT_ID_TXT
 			 from #Prov05_Identifiers_TYP
 			 where PRVDR_ID_TYPE_CD is not null
@@ -1448,7 +1449,7 @@ proc sql;
 	         tms_run_id as TMSIS_RUN_ID,
 	         SUBMTG_STATE_CD,
 			 submitting_state_prov_id as SUBMTG_STATE_PRVDR_ID,
-             submitting_state_prov_id_of_affiliated_entity as SUBMTG_STATE_AFLTD_PRVDR_ID
+             cast(submitting_state_prov_id_of_affiliated_entity as varchar(12)) as SUBMTG_STATE_AFLTD_PRVDR_ID
 			 from #Prov08_Groups 
       order by TMSIS_RUN_ID, SUBMTG_STATE_CD, SUBMTG_STATE_PRVDR_ID;
   ) by tmsis_passthrough;

@@ -24,6 +24,18 @@
 /*				12/06/2021- DB modified to add variable dgns_1_ccsr_dflt_ctgry_cd							*/
 /*							-MACTAF-1802: Add default CCSR dx cat(ip lt ot) for primary dx code				*/
 /*							-MACTAF-1803: Add CCS category for CPT/HCPCS codes to ot claim lines			*/
+/*				05/03/2022- DB modified For V7.1															*/
+/*							-MACTAF-1966, MACTAF-1943														*/	
+/*								1. Increase width of XIX-MBESCBES-CATEGORY-OF-SERVICE from X(4) to X(5)	    */
+/*							-MACTAF-1949- Rename data elements 												*/
+/*							 COPAY-AMT: (LINE LEVEL) COPAY_AMT -> BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COPAYMENT-AMOUNT: (HEADER LEVEL) BENE_COPMT_AMT -> TOT_BENE_COPMT_PD_AMT
+/*							 BENEFICIARY-COINSURANCE-AMOUNT: (HEADER LEVEL) BENE_COINSRNC_AMT -> TOT_BENE_COINSRNC_PD_AMT
+/*							 BENEFICIARY-DEDUCTIBLE-AMOUNT: (HEADER LEVEL) BENE_DDCTBL_AMT -> TOT_BENE_DDCTBL_PD_AMT
+/*							-MACTAF-1951 - Modify data element width and rename								*/
+/*							 OT-RX-CLAIM-QUANTITY-ACTUAL:  OTHR_TOC_RX_CLM_ACTL_QTY ->	SVC_QTY_ACTL
+/*							 OT-RX-CLAIM-QUANTITY-ALLOWED: OTHR_TOC_RX_CLM_ALOWD_QTY -> SVC_QTY_ALOWD
+/*             note to DB: MODS COMPLETE ON THIS ONE 5/4/2022
 /************************************************************************************************************/
 options SASTRACE=',,,ds' SASTRACELOC=Saslog nostsuffix dbidirectexec sqlgeneration=dbms msglevel=I sql_ip_trace=source;
 
@@ -248,11 +260,11 @@ execute (
 	,%var_set_type6(TP_COPMT_PD_AMT,cond1=888888888.88, cond2=888888888, cond3=888888888.00, cond4=99999999999.00)
 	,%var_set_type2(MDCR_CMBND_DDCTBL_IND,0,cond1=0,cond2=1)                                                     
 	,%var_set_type2(mdcr_reimbrsmt_type_cd,2,cond1=01,cond2=02,cond3=03,cond4=04,cond5=05,cond6=06,cond7=07,cond8=08,cond9=09)
-	,%var_set_type6(BENE_COINSRNC_AMT,cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_COINSRNC_PD_AMT,new=BENE_COINSRNC_AMT,cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
 	,%fix_old_dates(BENE_COINSRNC_PD_DT)                   
-	,%var_set_type6(BENE_COPMT_AMT,   cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_COPMT_PD_AMT,new=BENE_COPMT_AMT,   cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
 	,%fix_old_dates(BENE_COPMT_PD_DT)                           
-	,%var_set_type6(BENE_DDCTBL_AMT,  cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
+	,%var_set_type6(TOT_BENE_DDCTBL_PD_AMT,new=BENE_DDCTBL_AMT,  cond1=888888888.88, cond2=888888888, cond3=88888888888.00)
 	,%fix_old_dates(BENE_DDCTBL_PD_DT)                        
 	,%var_set_type2(COPAY_WVD_IND,0,cond1=0,cond2=1)
 	,%fix_old_dates(CPTATD_AMT_RQSTD_DT)  
@@ -353,14 +365,14 @@ execute (
 		  else %var_set_type5(IMNZTN_type_cd,lpad=2,lowerbound=0,upperbound=29,multiple_condition=YES)
 	,%var_set_type6(BILL_AMT,	cond1=888888888.88, cond2=9999999999.99, cond3=999999.99, cond4=999999)
 	,%var_set_type6(ALOWD_AMT,	cond1=99999999.00, cond2=888888888.88, cond3=9999999999.99)
-	,%var_set_type6(COPAY_AMT,	cond1=88888888888.00, cond2=888888888.88)
+	,%var_set_type6(BENE_COPMT_PD_AMT,new=COPAY_AMT,	cond1=88888888888.00, cond2=888888888.88)
 	,%var_set_type6(TPL_AMT,	cond1=88888888.88) 
     ,%var_set_type6(MDCD_PD_AMT,	   cond1=888888888.88)
 	,%var_set_type6(MDCD_FFS_EQUIV_AMT,cond1=88888888888.80, cond2=888888888.88, cond3=999999.99)
 	,%var_set_type6(MDCR_PD_AMT,	   cond1=888888888.88, cond2=8888888.88, cond3=88888888888.00, cond4=99999999999.00, cond5=88888888888.88, cond6=9999999999.99)
     ,%var_set_type6(OTHR_INSRNC_AMT,   cond1=8888888888.00, cond2=888888888.88, cond3=88888888888.88)
-    ,%var_set_type6(OTHR_TOC_RX_CLM_ACTL_QTY, new=ACTL_SRVC_QTY, cond1=999999.000, cond2=888888.000, cond3=999999.99)
-    ,%var_set_type6(OTHR_TOC_RX_CLM_ALOWD_QTY, new=ALOWD_SRVC_QTY, cond1=999999.000, cond2=888888.000, cond3=888888.880, cond4=99999.999, cond5=99999)
+    ,%var_set_type6(SVC_QTY_ACTL, new=ACTL_SRVC_QTY, cond1=999999.000, cond2=888888.000, cond3=999999.99)
+    ,%var_set_type6(SVC_QTY_ALOWD, new=ALOWD_SRVC_QTY, cond1=999999.000, cond2=888888.000, cond3=888888.880, cond4=99999.999, cond5=99999)
     ,%var_set_tos(TOS_CD)
 	,%var_set_type5(BNFT_TYPE_CD,lpad=3,lowerbound=001,upperbound=108)
 	,%var_set_type2(HCBS_SRVC_CD,0,cond1=1,cond2=2,cond3=3,cond4=4,cond5=5,cond6=6,cond7=7)                                   
@@ -557,11 +569,11 @@ execute (
 , coalesce(upper(a.ADJSTMT_IND),'X') as ADJSTMT_IND                                   
 , upper(a.ADJSTMT_RSN_CD) as adjstmt_rsn_cd                              
 , coalesce(a.SRVC_BGNNG_DT,'01JAN1960') as SRVC_BGNNG_DT_HEADER  
-, a.BENE_COINSRNC_AMT                        
+, a.TOT_BENE_COINSRNC_PD_AMT                        
 , a.BENE_COINSRNC_PD_DT                   
-, a.BENE_COPMT_AMT                               
+, a.TOT_BENE_COPMT_PD_AMT                               
 , a.BENE_COPMT_PD_DT                           
-, a.BENE_DDCTBL_AMT                            
+, a.TOT_BENE_DDCTBL_PD_AMT                            
 , a.BENE_DDCTBL_PD_DT                        
 , upper(a.BLG_PRVDR_NPI_NUM) as blg_prvdr_npi_num                         
 , upper(a.BLG_PRVDR_NUM) as blg_prvdr_num                               
@@ -692,7 +704,7 @@ execute (
 , a.BILL_AMT                                             
 , upper(a.CLL_STUS_CD) as cll_stus_cd                                     
 , upper(a.CMS_64_FED_REIMBRSMT_CTGRY_CD) as cms_64_fed_reimbrsmt_ctgry_cd           
-, a.COPAY_AMT                                          
+, a.BENE_COPMT_PD_AMT                                          
 , coalesce(a.SRVC_ENDG_DT,'01JAN1960') as SRVC_ENDG_DT_LINE 		                                         
 , upper(a.HCPCS_SRVC_CD) 		as HCBS_SRVC_CD                                   
 , upper(a.HCPCS_TXNMY_CD) 		as HCBS_TXNMY                                     
@@ -711,8 +723,8 @@ execute (
 , upper(a.NDC_CD) as ndc_cd                                           
 , a.NDC_QTY                                               
 , upper(a.NDC_UOM_CD) as uom_cd                                            
-, a.OTHR_TOC_RX_CLM_ACTL_QTY                   
-, a.OTHR_TOC_RX_CLM_ALOWD_QTY                
+, a.SVC_QTY_ACTL                   
+, a.SVC_QTY_ALOWD                
 , a.OTHR_INSRNC_AMT                               
 , upper(a.PRE_AUTHRZTN_NUM) as pre_authrztn_num                                      
 , upper(a.PRCDR_CD) as prcdr_cd                                             
