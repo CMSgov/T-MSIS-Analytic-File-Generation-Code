@@ -1,5 +1,7 @@
 # CMS T-MSIS Analytic File (TAF) Generation Code
 
+# This repository is not maintained. It was last updated for TAF software release version 7.1. The new repository is https://github.com/Enterprise-CMCS/T-MSIS-Analytic-File-Generation-Python/
+----------
 This project aims to provide transparency to state Medicaid agencies and other stakeholders who are interested in the logic and processes that are used to create CMS’ interim T-MSIS Analytic Files (TAF). These new TAF data sets exist alongside T-MSIS and serve as an alternate data source tailored to meet the broad research needs of the Medicaid and CHIP data user community. 
 
 Background information about the TAF can be found on Medicaid.Gov at this link: 
